@@ -1,0 +1,27 @@
+[package]
+name = "ata42"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xitca-web = { version = "0.6.2", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+base64 = "0.22.1"
+
+[[bin]]
+name = "cli"
+path = "src/cli/main.rs"
+
+[[bin]]
+name = "signer"
+path = "src/signer/main.rs"
+
+
+[[bin]]
+name = "stamper"
+path = "src/stamper/main.rs"
+
+[profile.release]
+strip = true
+lto = "fat"
