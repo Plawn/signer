@@ -1,8 +1,15 @@
-use std::{sync::Arc};
+#![feature(error_generic_member_access, error_reporter)]
 
 use ata42::{Checker, SignedData, TimestampedData};
+use std::{backtrace::Backtrace, convert::Infallible, error, fmt, sync::Arc};
+
 use xitca_web::{
-    error::Error, handler::{handler_service, html::Html, json::Json, state::StateRef, Responder}, http::{StatusCode, WebResponse}, route::post, service::Service, App, WebContext
+    error::{Error, MatchError},
+    handler::{handler_service, html::Html, json::Json, state::StateRef, Responder},
+    http::{StatusCode, WebResponse},
+    route::{get, post},
+    service::Service,
+    App, WebContext,
 };
 
 struct AppState {
@@ -17,36 +24,66 @@ fn main() -> std::io::Result<()> {
     App::new()
         .with_state(state)
         .at("/sign", post(handler_service(sign)))
-        // .enclosed_fn(error_handler)
+        .enclosed_fn(error_handler)
         .serve()
         .bind("0.0.0.0:8080")?
         .run()
         .wait()
 }
-use anyhow;
-use std::{convert::Infallible, error, fmt};
-#[derive(Debug)]
+
+// a custom error type. must implement following traits:
+// std::fmt::{Debug, Display} for formatting
+// std::error::Error for backtrace and type casting
+// From for converting from Self to xitca_web::error::Error type.
+// xitca_web::service::Service for lazily generating http response.
 struct MyError {
-    err: anyhow::Error,
+    // thread backtrace which can be requested after type erasing through std::error::Error::provide API.
+    backtrace: Backtrace,
 }
-impl fmt::Display for MyError {
+
+
+impl fmt::Debug for MyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("MyError")
+        f.debug_struct("MyError").finish()
     }
 }
-impl error::Error for MyError {}
 
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("custom error")
+    }
+}
 
-impl From<anyhow::Error> for MyError {
-    fn from(err: anyhow::Error) -> MyError {
-        MyError { err }
+impl error::Error for MyError {
+    // necessary for providing backtrace to xitca_web::error::Error instance.
+    fn provide<'a>(&'a self, request: &mut error::Request<'a>) {
+        request.provide_ref(&self.backtrace);
+    }
+}
+
+// Error<C> is the main error type xitca-web uses and at some point MyError would
+// need to be converted to it.
+impl<C> From<MyError> for Error<C> {
+    fn from(e: MyError) -> Self {
+        Error::from_service(e)
+    }
+}
+
+// response generator of MyError. in this case we generate blank bad request error.
+impl<'r, C> Service<WebContext<'r, C>> for MyError {
+    type Response = WebResponse;
+    type Error = Infallible;
+
+    async fn call(&self, ctx: WebContext<'r, C>) -> Result<Self::Response, Self::Error> {
+        StatusCode::BAD_REQUEST.call(ctx).await
     }
 }
 
 async fn sign(
     StateRef(state): StateRef<'_, AppState>,
     Json(payload): Json<TimestampedData>,
-) -> Result<Json<SignedData>, anyhow::Error> {
+) -> Result<Json<SignedData>, MyError> {
+
     let result = state.checker.check(
         payload.data.to_vec().unwrap(),
         payload.signature.to_vec().unwrap(),
@@ -54,49 +91,66 @@ async fn sign(
     match result {
         Some(v) => match v {
             true => Ok(Json(SignedData::new())),
-            false => Err(anyhow::Error::msg("Failed")),
+            false => Err(MyError {
+                backtrace: Backtrace::capture(),
+            }),
         },
-        None => Err(anyhow::Error::msg("Failed")),
+        None => Err(MyError {
+            backtrace: Backtrace::capture(),
+        }),
     }
 }
 
 
-// a handler middleware observe route services output.
-async fn error_handler<S>(service: &S, mut ctx: WebContext<'_>) -> Result<WebResponse, Error>
+// a middleware function used for intercept and interact with app handler outputs.
+async fn error_handler<S, C>(s: &S, mut ctx: WebContext<'_, C>) -> Result<WebResponse, Error<C>>
 where
-    S: for<'r> Service<WebContext<'r>, Response = WebResponse, Error = Error>
+    S: for<'r> Service<WebContext<'r, C>, Response = WebResponse, Error = Error<C>>,
 {
-    // unlike WebResponse which is already a valid http response. the error is treated as it's
-    // onw type on the other branch of the Result enum.  
+    match s.call(ctx.reborrow()).await {
+        Ok(res) => Ok(res),
+        Err(e) => {
+            // debug format error info.
+            println!("{e:?}");
 
-    // since the handler function at the start of example always produce error. our middleware
-    // will always observe the Error type value so let's unwrap it.
-    let err = service.call(ctx.reborrow()).await.err().unwrap();
-     
-    // now we have the error value we can start to interact with it and add our logic of
-    // handling it.
+            // display format error info.
+            println!("{e}");
 
-    // we can print the error.
-    println!("{err}");
+            // generate http response actively. from here it's OK to early return it in Result::Ok
+            // variant as error_handler function's output
+            let _res = e.call(ctx.reborrow()).await?;
+            // return Ok(_res);
 
-    // we can log the error.
-    // tracing::error!("{err}");
+            // upcast trait and downcast to concrete type again.
+            // this offers the ability to regain typed error specific error handling.
+            // *. this is a runtime feature and not reinforced at compile time.
+            if let Some(_e) = e.upcast().downcast_ref::<MyError>() {
+                // handle typed error.
+            }
 
-    // we can render the error to html and convert it to http response.
-    let html = format!("<!DOCTYPE html>\
-        <html>\
-        <body>\
-        <h1>{err}</h1>\
-        </body>\
-        </html>");
-    return (Html(html), StatusCode::BAD_REQUEST).respond(ctx).await;
+            // type casting can also be used to handle xitca-web's "internal" error types for overriding
+            // default error behavior.
+            // *. "internal" means these error types have their default error formatter and http response generator.
+            // *. "internal" error types are public types exported through `xitca_web::error` module. it's OK to
+            // override them for custom formatting/http response generating.
+            if e.upcast().downcast_ref::<MatchError>().is_some() {
+                // MatchError is error type for request not matching any route from application service.
+                // in this case we override it's default behavior by generating a different http response.
+                return (Html("<h1>404 Not Found</h1>"), StatusCode::NOT_FOUND)
+                    .respond(ctx)
+                    .await;
+            }
 
-    // or by default the error value is returned in Result::Err and passed to parent services
-    // of App or other middlewares where eventually it would be converted to WebResponse.
-     
-    // "eventually" can either mean a downstream user provided error handler middleware/service
-    // or the implicit catch all error middleware xitca-web offers. In the latter case a default
-    // WebResponse is generated with minimal information describing the reason of error.
+            // below are error handling feature only enabled by using nightly rust.
 
-    // Err(err)
+            // utilize std::error module for backtrace and more advanced error info.
+            let report = error::Report::new(&e).pretty(true).show_backtrace(true);
+            // display error report
+            println!("{report}");
+
+            // the most basic error handling is to ignore it and return as is. xitca-web is able to take care
+            // of error by utilizing it's according trait implements(Debug,Display,Error and Service impls)
+            Err(e)
+        }
+    }
 }
