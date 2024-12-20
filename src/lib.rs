@@ -14,7 +14,7 @@ impl Checker {
         }
     }
 
-    pub fn check(&self) -> Option<bool> {
+    pub fn check(&self, data: Vec<u8>, signature: Vec<u8>) -> Option<bool> {
         // TODO make real implem
         Some(true)
     }

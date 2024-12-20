@@ -1,15 +1,16 @@
-use serde::{Deserialize, Serialize};
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct TimestampedData {
     // bae
-    data: StringBytes,
+    pub data: StringBytes,
+    pub signature: StringBytes,
 }
 
 /// Base 64 encoded byte array
 #[derive(Deserialize, Serialize)]
-struct StringBytes(String);
+pub struct StringBytes(String);
 
 impl StringBytes {
     pub fn to_vec(&self) -> Option<Vec<u8>> {
@@ -29,6 +30,7 @@ impl TimestampedData {
     pub fn new() -> Self {
         Self {
             data: StringBytes::from(vec![1, 2, 3]),
+            signature: StringBytes::from(vec![1, 2, 3]),
         }
     }
 }

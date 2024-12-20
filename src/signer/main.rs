@@ -1,10 +1,8 @@
-use std::{io::Error, sync::Arc};
+use std::{sync::Arc};
 
 use ata42::{Checker, SignedData, TimestampedData};
 use xitca_web::{
-    handler::{handler_service, json::Json, state::StateRef},
-    route::{get, post},
-    App,
+    error::Error, handler::{handler_service, html::Html, json::Json, state::StateRef, Responder}, http::{StatusCode, WebResponse}, route::post, service::Service, App, WebContext
 };
 
 struct AppState {
@@ -13,64 +11,92 @@ struct AppState {
 
 fn main() -> std::io::Result<()> {
     // TODO: add certificate in state to make it easy to handle the verification
-    let checker = Arc::from(AppState {
+    let state = Arc::from(AppState {
         checker: Checker::new(),
     });
     App::new()
-        // use trait object as application state
-        .with_state(checker)
-        // .with_state(object_state())
-        // .at("/", get(handler_service(handler)))
-        .at(
-            "/sign",
-            post(handler_service(sign)).get(handler_service(sign)),
-        )
+        .with_state(state)
+        .at("/sign", post(handler_service(sign)))
+        // .enclosed_fn(error_handler)
         .serve()
-        .bind("127.0.0.1:8080")?
+        .bind("0.0.0.0:8080")?
         .run()
         .wait()
 }
-
-// a simple trait for injecting dependent type and logic to application.
-trait DI {
-    fn name(&self) -> &'static str;
+use anyhow;
+use std::{convert::Infallible, error, fmt};
+#[derive(Debug)]
+struct MyError {
+    err: anyhow::Error,
 }
-
-// thread safe trait object state constructor.
-fn object_state() -> Arc<dyn DI + Send + Sync> {
-    // a dummy type implementing DI trait.
-    struct Foo {}
-
-    impl DI for Foo {
-        fn name(&self) -> &'static str {
-            "foo"
-        }
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("MyError")
     }
-
-    // only this function knows the exact type implementing DI trait.
-    // everywhere else in the application it's only known as dyn DI trait object.
-    Arc::new(Foo {})
 }
+impl error::Error for MyError {}
 
-// type ExampleType<'a> = StateRef<'a, dyn DI + Send + Sync>;
 
-// // StateRef extractor is able extract &dyn DI from application state.
-// async fn handler(StateRef(obj): ExampleType<'_>) -> String {
-//     // get request to "/" path should return "hello foo" string response.
-//     format!("hello {}", obj.name())
-// }
+impl From<anyhow::Error> for MyError {
+    fn from(err: anyhow::Error) -> MyError {
+        MyError { err }
+    }
+}
 
 async fn sign(
     StateRef(state): StateRef<'_, AppState>,
     Json(payload): Json<TimestampedData>,
-) -> Result<Json<SignedData>, Error> {
-    let result = state.checker.check();
+) -> Result<Json<SignedData>, anyhow::Error> {
+    let result = state.checker.check(
+        payload.data.to_vec().unwrap(),
+        payload.signature.to_vec().unwrap(),
+    );
     match result {
         Some(v) => match v {
             true => Ok(Json(SignedData::new())),
-            false => Err(Error::last_os_error()),
+            false => Err(anyhow::Error::msg("Failed")),
         },
-        None => Err(Error::last_os_error()),
+        None => Err(anyhow::Error::msg("Failed")),
     }
 }
 
+
+// a handler middleware observe route services output.
+async fn error_handler<S>(service: &S, mut ctx: WebContext<'_>) -> Result<WebResponse, Error>
+where
+    S: for<'r> Service<WebContext<'r>, Response = WebResponse, Error = Error>
+{
+    // unlike WebResponse which is already a valid http response. the error is treated as it's
+    // onw type on the other branch of the Result enum.  
+
+    // since the handler function at the start of example always produce error. our middleware
+    // will always observe the Error type value so let's unwrap it.
+    let err = service.call(ctx.reborrow()).await.err().unwrap();
+     
+    // now we have the error value we can start to interact with it and add our logic of
+    // handling it.
+
+    // we can print the error.
+    println!("{err}");
+
+    // we can log the error.
+    // tracing::error!("{err}");
+
+    // we can render the error to html and convert it to http response.
+    let html = format!("<!DOCTYPE html>\
+        <html>\
+        <body>\
+        <h1>{err}</h1>\
+        </body>\
+        </html>");
+    return (Html(html), StatusCode::BAD_REQUEST).respond(ctx).await;
+
+    // or by default the error value is returned in Result::Err and passed to parent services
+    // of App or other middlewares where eventually it would be converted to WebResponse.
+     
+    // "eventually" can either mean a downstream user provided error handler middleware/service
+    // or the implicit catch all error middleware xitca-web offers. In the latter case a default
+    // WebResponse is generated with minimal information describing the reason of error.
+
+    // Err(err)
+}
