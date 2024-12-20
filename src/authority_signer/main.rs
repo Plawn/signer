@@ -1,8 +1,8 @@
 #![feature(error_generic_member_access, error_reporter)]
 
-use ata42::{Checker, SignedData, TimestampedData};
 use std::{backtrace::Backtrace, convert::Infallible, error, fmt, sync::Arc};
 
+use ata42::structs::{SignedData, TimestampedData};
 use xitca_web::{
     error::{Error, MatchError},
     handler::{handler_service, html::Html, json::Json, state::StateRef, Responder},
@@ -13,13 +13,13 @@ use xitca_web::{
 };
 
 struct AppState {
-    checker: Checker,
+    checker: ata42::checker::Checker,
 }
 
 fn main() -> std::io::Result<()> {
     // TODO: add certificate in state to make it easy to handle the verification
     let state = Arc::from(AppState {
-        checker: Checker::new(),
+        checker: ata42::checker::Checker::new(),
     });
     App::new()
         .with_state(state)
@@ -36,10 +36,7 @@ fn main() -> std::io::Result<()> {
 // std::error::Error for backtrace and type casting
 // From for converting from Self to xitca_web::error::Error type.
 // xitca_web::service::Service for lazily generating http response.
-struct MyError {
-    // thread backtrace which can be requested after type erasing through std::error::Error::provide API.
-    backtrace: Backtrace,
-}
+struct MyError(anyhow::Error);
 
 
 impl fmt::Debug for MyError {
@@ -50,14 +47,14 @@ impl fmt::Debug for MyError {
 
 impl fmt::Display for MyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("custom error")
+        f.write_str(&self.0.to_string())
     }
 }
 
 impl error::Error for MyError {
     // necessary for providing backtrace to xitca_web::error::Error instance.
     fn provide<'a>(&'a self, request: &mut error::Request<'a>) {
-        request.provide_ref(&self.backtrace);
+        request.provide_ref(&self.0);
     }
 }
 
@@ -75,7 +72,7 @@ impl<'r, C> Service<WebContext<'r, C>> for MyError {
     type Error = Infallible;
 
     async fn call(&self, ctx: WebContext<'r, C>) -> Result<Self::Response, Self::Error> {
-        StatusCode::BAD_REQUEST.call(ctx).await
+        StatusCode::INTERNAL_SERVER_ERROR.call(ctx).await
     }
 }
 
@@ -89,15 +86,14 @@ async fn sign(
         payload.signature.to_vec().unwrap(),
     );
     match result {
-        Some(v) => match v {
-            true => Ok(Json(SignedData::new())),
-            false => Err(MyError {
-                backtrace: Backtrace::capture(),
-            }),
+        Some(v) => match !v {
+
+            true => {
+                // should sign here
+                Ok(Json(SignedData::new()))},
+            false => Err(MyError(anyhow::Error::msg("Failed"))),
         },
-        None => Err(MyError {
-            backtrace: Backtrace::capture(),
-        }),
+        None => Err(MyError(anyhow::Error::msg("Failed"))),
     }
 }
 
@@ -136,7 +132,7 @@ where
             if e.upcast().downcast_ref::<MatchError>().is_some() {
                 // MatchError is error type for request not matching any route from application service.
                 // in this case we override it's default behavior by generating a different http response.
-                return (Html("<h1>404 Not Found</h1>"), StatusCode::NOT_FOUND)
+                return (Html("<h1>404 Not Found -> yo </h1>"), StatusCode::NOT_FOUND)
                     .respond(ctx)
                     .await;
             }

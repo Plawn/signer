@@ -16,7 +16,7 @@ path = "src/cli/main.rs"
 
 [[bin]]
 name = "signer"
-path = "src/signer/main.rs"
+path = "src/authority_signer/main.rs"
 
 
 [[bin]]
