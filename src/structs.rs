@@ -9,7 +9,7 @@ pub struct TimestampedData {
 }
 
 /// Base 64 encoded byte array
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct StringBytes(String);
 
 impl StringBytes {
@@ -44,6 +44,93 @@ impl SignedData {
     pub fn new() -> Self {
         Self {
             signature: StringBytes::from(vec![1, 2, 3]),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+/// In order to be on the wire or stored
+pub struct SignRequestSerialyzed {
+    data: StringBytes,
+}
+
+#[derive(Debug, Clone)]
+/// Struct to be used when processed
+/// Only has data field for now, but all the metadata can then be added later on
+pub struct SignRequest {
+    pub data: Vec<u8>,
+}
+
+impl From<SignRequest> for SignRequestSerialyzed {
+    fn from(value: SignRequest) -> Self {
+        Self {
+            data: StringBytes::from(value.data),
+        }
+    }
+}
+pub struct InvalidSignRequestSerialyzed;
+
+impl TryFrom<SignRequestSerialyzed> for SignRequest {
+    type Error = InvalidSignRequestSerialyzed;
+
+    fn try_from(value: SignRequestSerialyzed) -> Result<Self, Self::Error> {
+        match value.data.to_vec() {
+            Some(data) => Ok(Self { data }),
+            None => Err(InvalidSignRequestSerialyzed),
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Deserialize)]
+pub struct Signature(pub Vec<u8>);
+
+pub struct SignedSignRequest {
+    pub sign_request: SignRequest,
+    pub signature: Signature,
+}
+
+#[derive(Serialize, Debug, Deserialize)]
+pub struct SignedSignRequestSerialyzed {
+    sign_request: SignRequestSerialyzed,
+    signature: StringBytes,
+}
+
+impl From<SignedSignRequest> for SignedSignRequestSerialyzed {
+    fn from(value: SignedSignRequest) -> Self {
+        Self {
+            sign_request: value.sign_request.into(),
+            signature: StringBytes::from(value.signature.0),
+        }
+    }
+}
+
+pub struct InvalidSignedSignRequestSerialyzed;
+
+impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
+    type Error = InvalidSignedSignRequestSerialyzed;
+
+    fn try_from(value: SignedSignRequestSerialyzed) -> Result<Self, Self::Error> {
+        let s: SignRequest = value.sign_request.try_into().map_err(|_| InvalidSignedSignRequestSerialyzed)?;
+        // TODO: remove unwrap
+        let v = value.signature.to_vec().unwrap();
+        Ok(Self {
+            sign_request: s,
+            signature: Signature(v),
+        })
+    }
+}
+
+impl SignRequest {
+    pub fn create(data: Vec<u8>) -> Self {
+        Self { data }
+    }
+}
+
+impl SignedSignRequest {
+    pub fn create(sign_request: SignRequest, signature: Signature) -> Self {
+        Self {
+            sign_request,
+            signature,
         }
     }
 }
