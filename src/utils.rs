@@ -2,6 +2,7 @@
 
 use std::{backtrace::Backtrace, convert::Infallible, error, fmt, fs::File, io::Read, path::PathBuf, sync::Arc};
 
+use ring::signature;
 use xitca_web::{
     error::{Error, MatchError},
     handler::{handler_service, html::Html, json::Json, state::StateRef, Responder},
@@ -127,4 +128,23 @@ pub fn read_file(path: &PathBuf) -> Result<Vec<u8>, anyhow::Error> {
     let mut res = vec![];
     f.read_to_end(&mut res)?;
     Ok(res)
+}
+
+use anyhow::{anyhow};
+
+pub fn read_private_key(path: PathBuf) -> Result<signature::Ed25519KeyPair, anyhow::Error> {
+    let mut f = File::open(path)?;
+    let mut pkcs8_bytes = vec![];
+    f.read_to_end(&mut pkcs8_bytes)?;
+    let key = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
+        .map_err(|e| anyhow!("error reading key"))?;
+    Ok(key)
+}
+
+pub fn read_public_key(path: PathBuf) -> Result<signature::UnparsedPublicKey<Vec<u8>>, anyhow::Error> {
+    let mut f = File::open(path)?;
+    let mut pub_key = vec![];
+    f.read_to_end(&mut pub_key)?;
+    let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, pub_key);
+    Ok(peer_public_key)
 }

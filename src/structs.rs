@@ -168,6 +168,7 @@ impl From<SignedSignRequest> for SignedSignRequestSerialyzed {
     }
 }
 
+#[derive(Debug)]
 pub struct InvalidSignedSignRequestSerialyzed;
 
 impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {

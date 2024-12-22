@@ -3,8 +3,7 @@
 use std::sync::Arc;
 
 use ata42::{
-    structs::{SignedData, TimestampedData},
-    utils::MyError,
+    checker::Checker, signer::Signer, structs::{SignedData, SignedSignRequest, SignedSignRequestSerialyzed, TimestampedData}, utils::{read_private_key, read_public_key, MyError}
 };
 use xitca_web::{
     handler::{handler_service, json::Json, state::StateRef},
@@ -18,10 +17,18 @@ struct AppState {
 }
 
 fn main() -> std::io::Result<()> {
+    let private_key = "CAs/signer/key.p8".into();
+    
+    
+    let public_key = "CAs/user/public.pem".into();
+    // TODO: bad error
+    let signer = Signer::new(read_private_key(private_key).expect("failed to read key"));
     // TODO: add certificate in state to make it easy to handle the verification
+    let checker = Checker::new(read_public_key(public_key).expect("failed to read key"));
+    
     let state = Arc::from(AppState {
-        checker: ata42::checker::Checker::new(),
-        signer: ata42::signer::Signer::new(),
+        checker,
+        signer,
     });
     App::new()
         .with_state(state)
@@ -33,16 +40,22 @@ fn main() -> std::io::Result<()> {
         .wait()
 }
 
+use anyhow::anyhow;
+
 async fn sign(
     StateRef(state): StateRef<'_, AppState>,
-    Json(payload): Json<TimestampedData>,
+    Json(payload): Json<SignedSignRequestSerialyzed>,
 ) -> Result<Json<SignedData>, MyError> {
+    println!("signed request: {:?}", payload);
+    let value: SignedSignRequest = payload.try_into().unwrap();
+    println!("got request: {:?}", value.signature);
     let result = state.checker.check(
-        payload.data.to_vec().unwrap(),
-        payload.signature.to_vec().unwrap(),
+        &value.sign_request.get_sign_image().unwrap(),
+        &value.signature,
     );
+    println!("got result: {:?}", result);
     match result {
-        Some(v) => match !v {
+        Some(v) => match v {
             true => {
                 // should sign here
                 Ok(Json(SignedData::new()))

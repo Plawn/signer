@@ -12,7 +12,7 @@ use ata42::{
         Serializer, SignRequest, SignRequestSerialyzed, SignedSignRequest,
         SignedSignRequestSerialyzed,
     },
-    utils::read_file,
+    utils::{read_file, read_private_key, read_public_key},
 };
 use ring::{
     rand,
@@ -98,22 +98,13 @@ fn read_signed_sign_request_from_file(path: PathBuf) -> Result<SignedSignRequest
     Ok(value)
 }
 
-fn read_private_key(path: PathBuf) -> Result<signature::Ed25519KeyPair, anyhow::Error> {
-    let mut f = File::open(path)?;
-    let mut pkcs8_bytes = vec![];
-    f.read_to_end(&mut pkcs8_bytes)?;
-    let key = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
-        .map_err(|e| anyhow!("error reading key"))?;
-    Ok(key)
+
+pub fn read_signed_sign_request_from_bytes(data: Vec<u8>) -> Result<SignedSignRequest, anyhow::Error> {
+    let v: SignedSignRequestSerialyzed = serde_json::from_slice(&data)?;
+    let value: SignedSignRequest = v.try_into().map_err(|e| anyhow!("error"))?;
+    Ok(value)
 }
 
-fn read_public_key(path: PathBuf) -> Result<signature::UnparsedPublicKey<Vec<u8>>, anyhow::Error> {
-    let mut f = File::open(path)?;
-    let mut pub_key = vec![];
-    f.read_to_end(&mut pub_key)?;
-    let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, pub_key);
-    Ok(peer_public_key)
-}
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
