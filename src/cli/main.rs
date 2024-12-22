@@ -7,7 +7,6 @@ use std::{
 use anyhow::anyhow;
 use ata42::structs::{
     SignRequest, SignRequestSerialyzed, Signature, SignedSignRequest, SignedSignRequestSerialyzed,
-    StringBytes,
 };
 use ring::{
     rand,
@@ -44,7 +43,13 @@ fn sign_sign_request(
     let j = serde_json::to_vec(&for_storage)?;
     let signature = private_key.sign(&j);
     let s = signature.as_ref();
-    Ok(SignedSignRequest::create(req, Signature(s.to_vec())))
+    Ok(SignedSignRequest::create(
+        req,
+        Signature {
+            value: s.to_vec(),
+            algorithm: ata42::structs::SignAlgorithm::ED25519,
+        },
+    ))
 }
 
 use clap::{Parser, Subcommand};
@@ -160,7 +165,12 @@ fn main() -> anyhow::Result<()> {
                 let key = read_public_key(key)?;
                 let content: SignRequestSerialyzed = req.sign_request.into();
                 let j = serde_json::to_vec(&content)?;
-                key.verify(&j, &req.signature.0).expect("failed to verify");
+                let result = key.verify(&j, &req.signature.value);
+                if result.is_ok() {
+                    println!("signture valid")
+                } else {
+                    println!("signture invalid")
+                }
             }
         },
         None => todo!(),

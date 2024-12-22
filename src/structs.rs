@@ -81,8 +81,22 @@ impl TryFrom<SignRequestSerialyzed> for SignRequest {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SignAlgorithm {
+    ED25519
+}
+
 #[derive(Serialize, Debug, Deserialize)]
-pub struct Signature(pub Vec<u8>);
+pub struct Signature {
+    pub algorithm: SignAlgorithm, 
+    pub value: Vec<u8>
+}
+
+#[derive(Serialize, Debug, Deserialize)]
+pub struct SignatureSerialyzed {
+    pub algorithm: SignAlgorithm, 
+    pub value: StringBytes,
+}
 
 pub struct SignedSignRequest {
     pub sign_request: SignRequest,
@@ -92,14 +106,38 @@ pub struct SignedSignRequest {
 #[derive(Serialize, Debug, Deserialize)]
 pub struct SignedSignRequestSerialyzed {
     sign_request: SignRequestSerialyzed,
-    signature: StringBytes,
+    signature: SignatureSerialyzed,
+}
+
+impl From<Signature> for SignatureSerialyzed {
+    fn from(value: Signature) -> Self {
+        Self {
+            value: StringBytes::from(value.value),
+            algorithm: value.algorithm,
+        }
+    }
+} 
+
+#[derive(Debug)]
+pub struct InvalidSignatureSerialyzed;
+
+impl TryFrom<SignatureSerialyzed> for Signature {
+    type Error = InvalidSignatureSerialyzed;
+
+    fn try_from(value: SignatureSerialyzed) -> Result<Self, Self::Error> {
+       Ok(Self {
+            // TODO: fix expect
+            value: value.value.to_vec().expect("failed to parse value"),
+            algorithm: value.algorithm,
+        })
+    }
 }
 
 impl From<SignedSignRequest> for SignedSignRequestSerialyzed {
     fn from(value: SignedSignRequest) -> Self {
         Self {
             sign_request: value.sign_request.into(),
-            signature: StringBytes::from(value.signature.0),
+            signature: value.signature.into(),
         }
     }
 }
@@ -112,10 +150,10 @@ impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
     fn try_from(value: SignedSignRequestSerialyzed) -> Result<Self, Self::Error> {
         let s: SignRequest = value.sign_request.try_into().map_err(|_| InvalidSignedSignRequestSerialyzed)?;
         // TODO: remove unwrap
-        let v = value.signature.to_vec().unwrap();
+        let v: Signature = value.signature.try_into().unwrap();
         Ok(Self {
             sign_request: s,
-            signature: Signature(v),
+            signature: v,
         })
     }
 }
