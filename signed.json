@@ -1,9 +1,10 @@
 {
   "sign_request": {
-    "data": "ewogICBgImhlYWRlciI6IHsKICAgICAgICAiaGFzaGVzIjpbCiAgICAgICAgICAgICIxIiwgIjIiCiAgICAgICAgXQogICAgfQp9"
+    "data": "ewogICAgImhlYWRlciI6IHsKICAgICAgICAiaGFzaGVzIjpbCiAgICAgICAgICAgICIxIiwgIjIiCiAgICAgICAgXQogICAgfQp9",
+    "serialyzer": "JSON"
   },
   "signature": {
     "algorithm": "ED25519",
-    "value": "wiy6pDZXDlZ-PJXmqzLY0VlMjdiQ6626DHnaf_8L6quoRu1a5fog0AEtHQ8B_RkeuLXkvPYitavMcxdazr4zDg=="
+    "value": "4SHdJjG89ZYK58Tl0A6gbFFu2gUwvNX_MqCoufe-7CGz-lVurSzadzwKZcAvbw9j9BHHiqgubi80x3AcnETjAQ=="
   }
 }

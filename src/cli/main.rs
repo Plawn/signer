@@ -5,8 +5,13 @@ use std::{
 };
 
 use anyhow::anyhow;
-use ata42::structs::{
-    SignRequest, SignRequestSerialyzed, Signature, SignedSignRequest, SignedSignRequestSerialyzed,
+use ata42::{
+    checker::Checker,
+    structs::{
+        Serializer, SignRequest, SignRequestSerialyzed, Signature, SignedSignRequest,
+        SignedSignRequestSerialyzed,
+    },
+    utils::read_file,
 };
 use ring::{
     rand,
@@ -31,17 +36,12 @@ fn generate_keys(path_private: PathBuf, path_public: PathBuf) -> Result<(), anyh
     Ok(())
 }
 
-fn create_sign_request(data: Vec<u8>) -> SignRequest {
-    SignRequest::create(data)
-}
-
 fn sign_sign_request(
     req: SignRequest,
     private_key: Ed25519KeyPair,
 ) -> Result<SignedSignRequest, anyhow::Error> {
-    let for_storage: SignRequestSerialyzed = req.clone().into();
-    let j = serde_json::to_vec(&for_storage)?;
-    let signature = private_key.sign(&j);
+    let bytes = req.clone().get_sign_image()?;
+    let signature = private_key.sign(&bytes);
     let s = signature.as_ref();
     Ok(SignedSignRequest::create(
         req,
@@ -95,15 +95,6 @@ enum Commands {
     },
 }
 
-fn read_sign_request_from_file(path: PathBuf) -> Result<SignRequest, anyhow::Error> {
-    let f = File::open(path)?;
-    let v: SignRequestSerialyzed = serde_json::from_reader(f)?;
-    let value: SignRequest = v
-        .try_into()
-        .map_err(|e| anyhow!("failed to read sign request"))?;
-    Ok(value)
-}
-
 fn read_signed_sign_request_from_file(path: PathBuf) -> Result<SignedSignRequest, anyhow::Error> {
     let f = File::open(path)?;
     let v: SignedSignRequestSerialyzed = serde_json::from_reader(f)?;
@@ -124,8 +115,7 @@ fn read_public_key(path: PathBuf) -> Result<signature::UnparsedPublicKey<Vec<u8>
     let mut f = File::open(path)?;
     let mut pub_key = vec![];
     f.read_to_end(&mut pub_key)?;
-    let peer_public_key: signature::UnparsedPublicKey<Vec<u8>> =
-        signature::UnparsedPublicKey::new(&signature::ED25519, pub_key);
+    let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, pub_key);
     Ok(peer_public_key)
 }
 
@@ -138,10 +128,7 @@ fn main() -> anyhow::Result<()> {
                 generate_keys(private, public)?;
             }
             Commands::MakeSignRequest { data } => {
-                let mut input = File::open(data)?;
-                let mut buf = vec![];
-                input.read_to_end(&mut buf)?;
-                let req = create_sign_request(buf);
+                let req = SignRequest::create(read_file(&data)?, Serializer::JSON);
                 let for_storage: SignRequestSerialyzed = req.into();
                 let output = File::create("request.json")?;
                 serde_json::to_writer_pretty(output, &for_storage)?;
@@ -150,8 +137,9 @@ fn main() -> anyhow::Result<()> {
                 key,
                 sign_request_path,
             } => {
-                let req = read_sign_request_from_file(sign_request_path)?;
+                let req = SignRequest::from_bytes(read_file(&sign_request_path)?)?;
                 let private_key = read_private_key(key)?;
+                // TODO: move signer
                 let result = sign_sign_request(req, private_key)?;
                 let for_storage: SignedSignRequestSerialyzed = result.into();
                 let output = File::create("signed.json")?;
@@ -161,15 +149,16 @@ fn main() -> anyhow::Result<()> {
                 key,
                 sign_request_path,
             } => {
+                let checker = Checker::new(read_public_key(key)?);
+                // TODO: move to [SignedSignRequest]
                 let req = read_signed_sign_request_from_file(sign_request_path)?;
-                let key = read_public_key(key)?;
-                let content: SignRequestSerialyzed = req.sign_request.into();
-                let j = serde_json::to_vec(&content)?;
-                let result = key.verify(&j, &req.signature.value);
-                if result.is_ok() {
-                    println!("signture valid")
-                } else {
-                    println!("signture invalid")
+                let j = req.sign_request.get_sign_image()?;
+                match checker.check(&j, &req.signature) {
+                    Some(_) => {
+                        println!("signture valid");
+                        return Ok(());
+                    }
+                    None => Err(anyhow!("signature invalid"))?,
                 }
             }
         },

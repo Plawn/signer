@@ -1,5 +1,6 @@
+use anyhow::anyhow;
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct TimestampedData {
@@ -48,10 +49,30 @@ impl SignedData {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum Serializer {
+    JSON,
+}
+
+impl Serializer {
+    pub fn serialyze<T: Serialize>(&self, data: &T) -> Result<Vec<u8>, anyhow::Error> {
+        match self {
+            Serializer::JSON => Ok(serde_json::to_vec(data)?),
+        }
+    }
+
+    pub fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, anyhow::Error> {
+        match self {
+            Serializer::JSON => Ok(serde_json::from_slice(&data)?),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 /// In order to be on the wire or stored
 pub struct SignRequestSerialyzed {
     data: StringBytes,
+    serialyzer: Serializer,
 }
 
 #[derive(Debug, Clone)]
@@ -59,12 +80,14 @@ pub struct SignRequestSerialyzed {
 /// Only has data field for now, but all the metadata can then be added later on
 pub struct SignRequest {
     pub data: Vec<u8>,
+    pub serialyzer: Serializer,
 }
 
 impl From<SignRequest> for SignRequestSerialyzed {
     fn from(value: SignRequest) -> Self {
         Self {
             data: StringBytes::from(value.data),
+            serialyzer: value.serialyzer,
         }
     }
 }
@@ -75,7 +98,10 @@ impl TryFrom<SignRequestSerialyzed> for SignRequest {
 
     fn try_from(value: SignRequestSerialyzed) -> Result<Self, Self::Error> {
         match value.data.to_vec() {
-            Some(data) => Ok(Self { data }),
+            Some(data) => Ok(Self {
+                data,
+                serialyzer: value.serialyzer,
+            }),
             None => Err(InvalidSignRequestSerialyzed),
         }
     }
@@ -83,18 +109,18 @@ impl TryFrom<SignRequestSerialyzed> for SignRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SignAlgorithm {
-    ED25519
+    ED25519,
 }
 
 #[derive(Serialize, Debug, Deserialize)]
 pub struct Signature {
-    pub algorithm: SignAlgorithm, 
-    pub value: Vec<u8>
+    pub algorithm: SignAlgorithm,
+    pub value: Vec<u8>,
 }
 
 #[derive(Serialize, Debug, Deserialize)]
 pub struct SignatureSerialyzed {
-    pub algorithm: SignAlgorithm, 
+    pub algorithm: SignAlgorithm,
     pub value: StringBytes,
 }
 
@@ -116,7 +142,7 @@ impl From<Signature> for SignatureSerialyzed {
             algorithm: value.algorithm,
         }
     }
-} 
+}
 
 #[derive(Debug)]
 pub struct InvalidSignatureSerialyzed;
@@ -125,7 +151,7 @@ impl TryFrom<SignatureSerialyzed> for Signature {
     type Error = InvalidSignatureSerialyzed;
 
     fn try_from(value: SignatureSerialyzed) -> Result<Self, Self::Error> {
-       Ok(Self {
+        Ok(Self {
             // TODO: fix expect
             value: value.value.to_vec().expect("failed to parse value"),
             algorithm: value.algorithm,
@@ -148,7 +174,10 @@ impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
     type Error = InvalidSignedSignRequestSerialyzed;
 
     fn try_from(value: SignedSignRequestSerialyzed) -> Result<Self, Self::Error> {
-        let s: SignRequest = value.sign_request.try_into().map_err(|_| InvalidSignedSignRequestSerialyzed)?;
+        let s: SignRequest = value
+            .sign_request
+            .try_into()
+            .map_err(|_| InvalidSignedSignRequestSerialyzed)?;
         // TODO: remove unwrap
         let v: Signature = value.signature.try_into().unwrap();
         Ok(Self {
@@ -158,9 +187,23 @@ impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
     }
 }
 
+const DEFAULT_SERIALYZER: Serializer = Serializer::JSON;
+
 impl SignRequest {
-    pub fn create(data: Vec<u8>) -> Self {
-        Self { data }
+    pub fn create(data: Vec<u8>, serialyzer: Serializer) -> Self {
+        Self { data, serialyzer }
+    }
+
+    pub fn get_sign_image(self) -> Result<Vec<u8>, anyhow::Error> {
+        let for_storage: SignRequestSerialyzed = self.into();
+        let j = DEFAULT_SERIALYZER.serialyze(&for_storage)?;
+        Ok(j)
+    }
+
+    pub fn from_bytes(data: Vec<u8>) -> Result<Self, anyhow::Error> {
+        let d: SignRequestSerialyzed = DEFAULT_SERIALYZER.deserialize(&data)?;
+        let res: Self = d.try_into().map_err(|e| anyhow!("failed"))?;
+        Ok(res)
     }
 }
 

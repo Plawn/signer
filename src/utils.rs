@@ -1,6 +1,6 @@
 
 
-use std::{backtrace::Backtrace, convert::Infallible, error, fmt, sync::Arc};
+use std::{backtrace::Backtrace, convert::Infallible, error, fmt, fs::File, io::Read, path::PathBuf, sync::Arc};
 
 use xitca_web::{
     error::{Error, MatchError},
@@ -119,4 +119,12 @@ where
             Err(e)
         }
     }
+}
+
+
+pub fn read_file(path: &PathBuf) -> Result<Vec<u8>, anyhow::Error> {
+    let mut f = File::open(path)?;
+    let mut res = vec![];
+    f.read_to_end(&mut res)?;
+    Ok(res)
 }
