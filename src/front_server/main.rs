@@ -86,6 +86,7 @@ impl AuthoritySignerClient {
             .json(stamped)
             .send()
             .await
+            .inspect(|e| log::debug!("{:?}", e))
             .expect("failed to query stamper")
             .json()
             .await

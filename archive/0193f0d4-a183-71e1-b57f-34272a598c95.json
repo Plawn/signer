@@ -1,0 +1,22 @@
+{
+  "request": {
+    "sign_request": {
+      "data": "ewogICAgImhlYWRlciI6IHsKICAgICAgICAiaGFzaGVzIjpbCiAgICAgICAgICAgICIxIiwgIjIiCiAgICAgICAgXQogICAgfQp9",
+      "serialyzer": "JSON"
+    },
+    "signature": {
+      "algorithm": "ED25519",
+      "value": "4SHdJjG89ZYK58Tl0A6gbFFu2gUwvNX_MqCoufe-7CGz-lVurSzadzwKZcAvbw9j9BHHiqgubi80x3AcnETjAQ=="
+    }
+  },
+  "response": {
+    "sign_request": {
+      "data": "eyJzaWduX3JlcXVlc3QiOnsiZGF0YSI6ImV3b2dJQ0FnSW1obFlXUmxjaUk2SUhzS0lDQWdJQ0FnSUNBaWFHRnphR1Z6SWpwYkNpQWdJQ0FnSUNBZ0lDQWdJQ0l4SWl3Z0lqSWlDaUFnSUNBZ0lDQWdYUW9nSUNBZ2ZRcDkiLCJzZXJpYWx5emVyIjoiSlNPTiJ9LCJzaWduYXR1cmUiOnsiYWxnb3JpdGhtIjoiRUQyNTUxOSIsInZhbHVlIjoiNFNIZEpqRzg5WllLNThUbDBBNmdiRkZ1MmdVd3ZOWF9NcUNvdWZlLTdDR3otbFZ1clN6YWR6d0taY0F2Ync5ajlCSEhpcWd1Ymk4MHgzQWNuRVRqQVE9PSJ9fQ==",
+      "serialyzer": "JSON"
+    },
+    "signature": {
+      "algorithm": "ED25519",
+      "value": "2-Bn0jpxvYY6NyQu7JTY0n3MIqCFqxh25mRcRDHgVpijVq6IKIa1Zxv615Btxi82m75ZYfIoyR_he8hPvaG3Bw=="
+    }
+  }
+}

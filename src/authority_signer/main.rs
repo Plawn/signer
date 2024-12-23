@@ -61,6 +61,7 @@ async fn sign(
                 let signed = state
                     .signer
                     .sign(&base.sign_request.data.to_vec().unwrap())
+                    // TODO: handle error
                     .expect("failed to sign");
                 Ok(Json(signed.into()))
             }

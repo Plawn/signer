@@ -25,7 +25,7 @@ impl Signer {
     }
 
     pub fn sign(&self, bytes: &Vec<u8>) -> Result<Signature, anyhow::Error> {
-        let signature = self.key.sign(&bytes);
+        let signature = self.key.sign(bytes);
         Ok(Signature{
             algorithm: SignAlgorithm::ED25519,
             value: signature.as_ref().to_vec(),

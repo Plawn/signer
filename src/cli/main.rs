@@ -1,12 +1,9 @@
-use std::{
-    fs::File,
-    io::{Read, Write},
-    path::PathBuf,
-};
+use std::{fs::File, io::Write, path::PathBuf};
 
 use anyhow::anyhow;
 use ata42::{
     checker::Checker,
+    errors::SignInfrastructureError,
     signer::Signer,
     structs::{
         Serializer, SignRequest, SignRequestSerialyzed, SignatureSerialyzed, SignedSignRequest,
@@ -14,18 +11,20 @@ use ata42::{
     },
     utils::{read_file, read_private_key, read_public_key},
 };
+use clap::{Parser, Subcommand};
 use ring::{
     rand,
     signature::{self, KeyPair},
 };
 
-fn generate_keys(path_private: PathBuf, path_public: PathBuf) -> Result<(), anyhow::Error> {
+fn generate_keys(
+    path_private: PathBuf,
+    path_public: PathBuf,
+) -> Result<(), SignInfrastructureError> {
     // Generate a key pair in PKCS#8 (v2) format.
     let rng = rand::SystemRandom::new();
-    let pkcs8_bytes =
-        signature::Ed25519KeyPair::generate_pkcs8(&rng).map_err(|e| anyhow!("error"))?;
-    let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
-        .map_err(|e| anyhow!("error"))?;
+    let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)?;
+    let key_pair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())?;
 
     let private_key_bytes = pkcs8_bytes.as_ref();
     let mut file = File::create(path_private)?;
@@ -37,19 +36,9 @@ fn generate_keys(path_private: PathBuf, path_public: PathBuf) -> Result<(), anyh
     Ok(())
 }
 
-use clap::{Parser, Subcommand};
-
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    /// Optional name to operate on
-    // name: Option<String>,
-
-    /// Sets a custom config file
-    // #[arg(short, long, value_name = "FILE")]
-    // config: Option<PathBuf>,
-
-    /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     debug: u8,
 
@@ -95,21 +84,6 @@ enum Commands {
     },
 }
 
-fn read_signed_sign_request_from_file(path: PathBuf) -> Result<SignedSignRequest, anyhow::Error> {
-    let f = File::open(path)?;
-    let v: SignedSignRequestSerialyzed = serde_json::from_reader(f)?;
-    let value: SignedSignRequest = v.try_into().map_err(|e| anyhow!("error"))?;
-    Ok(value)
-}
-
-pub fn read_signed_sign_request_from_bytes(
-    data: Vec<u8>,
-) -> Result<SignedSignRequest, anyhow::Error> {
-    let v: SignedSignRequestSerialyzed = serde_json::from_slice(&data)?;
-    let value: SignedSignRequest = v.try_into().map_err(|e| anyhow!("error"))?;
-    Ok(value)
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -142,7 +116,8 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let checker = Checker::new(read_public_key(key)?);
             // TODO: move to [SignedSignRequest]
-            let req = read_signed_sign_request_from_file(sign_request_path)?;
+            let req: SignedSignRequest =
+                SignedSignRequestSerialyzed::from(&read_file(&sign_request_path)?).try_into()?;
             let j = req.sign_request.get_sign_image()?;
             match checker.check(&j, &req.signature) {
                 Some(_) => {

@@ -12,7 +12,7 @@ impl Checker {
     }
 
     pub fn check(&self, data: &Vec<u8>, signature: &Signature) -> Option<bool> {
-        match self.key.verify(&data, &signature.value) {
+        match self.key.verify(data, &signature.value) {
             Ok(_) => Some(true),
             Err(_) => None,
         }

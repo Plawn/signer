@@ -1,15 +1,13 @@
 
 
-use std::{backtrace::Backtrace, convert::Infallible, error, fmt, fs::File, io::Read, path::PathBuf, sync::Arc};
+use std::{convert::Infallible, error, fmt, fs::File, io::Read, path::PathBuf};
 
 use ring::signature;
 use xitca_web::{
     error::{Error, MatchError},
-    handler::{handler_service, html::Html, json::Json, state::StateRef, Responder},
+    handler::{html::Html, Responder},
     http::{StatusCode, WebResponse},
-    route::{get, post},
-    service::Service,
-    App, WebContext,
+    service::Service, WebContext,
 };
 
 // a custom error type. must implement following traits:
