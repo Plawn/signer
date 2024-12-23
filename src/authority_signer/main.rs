@@ -62,7 +62,6 @@ fn main() -> std::io::Result<()> {
         .with_state(state)
         .at("/live", get(handler_service(async || "OK")))
         .at("/sign", post(handler_service(sign)))
-        // .enclosed(Logger::new())
         .enclosed_fn(ata42::utils::error_handler)
         .enclosed(TowerHttpCompat::new(TraceLayer::new_for_http()))
         .serve()

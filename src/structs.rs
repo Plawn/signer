@@ -109,8 +109,7 @@ impl TryFrom<&Vec<u8>> for SignedSignRequestSerialyzed {
     type Error = crate::errors::SignInfrastructureError;
 
     fn try_from(value: &Vec<u8>) -> Result<Self, Self::Error> {
-        let res: Result<Self, serde_json::Error> = serde_json::from_slice(value);
-        match res {
+        match DEFAULT_SERIALYZER.deserialize(&value) {
             Ok(r) => Ok(r),
             Err(_) => Err(crate::errors::SignInfrastructureError::InvalidStruct),
         }
@@ -144,7 +143,7 @@ impl TryFrom<Vec<u8>> for SignatureSerialyzed {
     type Error = crate::errors::SignInfrastructureError;
     
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        match serde_json::from_slice(&value) {
+        match DEFAULT_SERIALYZER.deserialize(&value) {
             Ok(s) => Ok(s),
             Err(_) => Err(crate::errors::SignInfrastructureError::InvalidStruct),
         }
@@ -174,7 +173,7 @@ impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
     }
 }
 
-const DEFAULT_SERIALYZER: Serializer = Serializer::JSON;
+pub const DEFAULT_SERIALYZER: Serializer = Serializer::JSON;
 
 impl SignRequest {
     pub fn create(data: Vec<u8>, serialyzer: Serializer) -> Self {

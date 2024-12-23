@@ -1,7 +1,7 @@
 use ata42::{
     errors::SignInfrastructureError,
     signer::Signer,
-    structs::{Serializer, SignRequest, SignedSignRequestSerialyzed, StampedItem},
+    structs::{Serializer, SignRequest, SignedSignRequestSerialyzed, StampedItem, DEFAULT_SERIALYZER},
     utils::read_private_key,
 };
 use tower_http::trace::TraceLayer;
@@ -108,7 +108,7 @@ async fn sign(
     Json(payload): Json<SignedSignRequestSerialyzed>,
 ) -> Result<Json<SignedSignRequestSerialyzed>, AppError> {
     // TODO: remove expect
-    let content = serde_json::to_vec(&payload).expect("should not fail");
+    let content = DEFAULT_SERIALYZER.serialyze(&payload).expect("should not fail");
     let req = SignRequest::create(content, Serializer::JSON);
     // TODO: remove expect
     let signed = state.signer.sign_request(req).expect("failed to sign");
