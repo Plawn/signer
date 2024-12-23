@@ -1,7 +1,13 @@
 use ring::signature::Ed25519KeyPair;
 
-use crate::{errors::SignInfrastructureError, structs::{SignAlgorithm, SignRequest, Signature, SignedSignRequest}};
+use crate::{
+    errors::SignInfrastructureError,
+    structs::{SignAlgorithm, SignRequest, Signature, SignedSignRequest},
+};
 
+/// Checker is used to easely sign data
+/// For now it handles only local ED... key
+/// We need to handle more pkcs11 support in the future
 pub struct Signer {
     key: Ed25519KeyPair,
 }
@@ -11,17 +17,13 @@ impl Signer {
         Self { key }
     }
 
-    pub fn sign_request(&self, req: SignRequest) -> Result<SignedSignRequest, SignInfrastructureError> {
+    pub fn sign_request(
+        &self,
+        req: SignRequest,
+    ) -> Result<SignedSignRequest, SignInfrastructureError> {
         let bytes = req.clone().get_sign_image()?;
-        let signature = self.key.sign(&bytes);
-        let s = signature.as_ref();
-        Ok(SignedSignRequest::create(
-            req,
-            Signature {
-                value: s.to_vec(),
-                algorithm: SignAlgorithm::ED25519,
-            },
-        ))
+        let signature = self.sign(&bytes);
+        Ok(SignedSignRequest::create(req, signature))
     }
 
     pub fn sign(&self, bytes: &Vec<u8>) -> Signature {
