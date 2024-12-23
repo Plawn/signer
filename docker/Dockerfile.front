@@ -19,4 +19,4 @@ COPY --from=0 /app/target/release/front server
 # set the binary as entrypoint
 ENTRYPOINT ["/server"]
 
-EXPOSE 3000
+EXPOSE 4000

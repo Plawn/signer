@@ -15,7 +15,7 @@ FROM alpine:3.19
 # if needed, install additional dependencies here
 RUN apk add --no-cache libgcc
 # copy the binary into the final image
-COPY --from=0 /app/target/release/signer server
+COPY --from=0 /app/target/release/stamper server
 # set the binary as entrypoint
 ENTRYPOINT ["/server"]
 

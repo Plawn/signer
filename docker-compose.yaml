@@ -1,27 +1,28 @@
 
 services:
-  # front:
-  #   image: signer/front
-  #   build: 
-  #     context: .
-  #     dockerfile: docker/Dockerfile.front
-  #   command: 
-  #     - --authority-address "http://signer:8080" 
-  #     - --stamp-address "http://stamper:3000"
-  #   volumes:
-  #     - ./CAs:/app/CAs
-  #   ports:
-      # - "4000:4000"
+  front:
+    image: signer/front
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile.front
+    command: --authority-address "http://signer:8080" --stamp-address "http://stamper:3000"
+    ports:
+      - "4000:4000"
   signer:
-    image: signer/signer
-    # mount CAs
+    # image: signer/signer
+    volumes:
+      - ./CAs:/CAs
+    command: --private-key "CAs/signer/key.p8" --public-key "CAs/signer/public.pem" --stamp-public-key "CAs/timestamp/public.pem"
     build: 
       context: .
       dockerfile: docker/Dockerfile.signer
 
-  # stamper:
-  #   image: signer/signer
-  #   # mount CAs
-  #   build: 
-  #     context: .
-  #     dockerfile: docker/Dockerfile.signer
+  stamper:
+    image: signer/stamper
+    volumes:
+      - ./CAs:/CAs
+      - ./archive:/archive
+    command: --private-key "CAs/timestamp/key.p8" --public-key "CAs/timestamp/public.pem"
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile.stamper
