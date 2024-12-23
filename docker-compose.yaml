@@ -1,0 +1,27 @@
+
+services:
+  # front:
+  #   image: signer/front
+  #   build: 
+  #     context: .
+  #     dockerfile: docker/Dockerfile.front
+  #   command: 
+  #     - --authority-address "http://signer:8080" 
+  #     - --stamp-address "http://stamper:3000"
+  #   volumes:
+  #     - ./CAs:/app/CAs
+  #   ports:
+      # - "4000:4000"
+  signer:
+    image: signer/signer
+    # mount CAs
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile.signer
+
+  # stamper:
+  #   image: signer/signer
+  #   # mount CAs
+  #   build: 
+  #     context: .
+  #     dockerfile: docker/Dockerfile.signer

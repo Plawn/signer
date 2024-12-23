@@ -1,14 +1,15 @@
-#![feature(error_generic_member_access, error_reporter)]
-
 use ata42::{
     checker::Checker,
     signer::Signer,
     structs::{SignatureSerialyzed, SignedSignRequest, SignedSignRequestSerialyzed},
     utils::{read_private_key, read_public_key, MyError},
 };
+use xitca_web::middleware::tower_http_compat::TowerHttpCompat;
+
 use clap::Parser;
 use std::{path::PathBuf, sync::Arc};
 use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use xitca_web::{
     handler::{handler_service, json::Json, state::StateRef},
     route::{get, post},
@@ -32,9 +33,6 @@ struct Cli {
     #[arg(long, default_value = "8080")]
     port: u32,
 }
-use xitca_web::middleware::tower_http_compat::TowerHttpCompat;
-
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() -> std::io::Result<()> {
     let cli = Cli::parse();

@@ -11,6 +11,8 @@ use ata42::{
     },
     utils::{read_file, read_private_key, read_public_key},
 };
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 use clap::{Parser, Subcommand};
 use ring::{
     rand,
@@ -134,6 +136,21 @@ impl SignClient {
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // axum logs rejections from built-in extractors with the `axum::rejection`
+                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+                format!(
+                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     match cli.command {
         Commands::GenerateKeys { private, public } => {
             generate_keys(private, public)?;
@@ -161,10 +178,9 @@ async fn main() -> anyhow::Result<()> {
             sign_request_path,
         } => {
             let checker = Checker::new(read_public_key(&key)?);
-            // TODO: move to [SignedSignRequest]
+            let content = read_file(&sign_request_path)?;
             let req: SignedSignRequest =
-                SignedSignRequestSerialyzed::try_from(read_file(&sign_request_path)?.as_ref())?
-                    .try_into()?;
+                SignedSignRequestSerialyzed::try_from(content.as_ref())?.try_into()?;
             let j = req.sign_request.get_sign_image()?;
             match checker.check(&j, &req.signature) {
                 Some(_) => {

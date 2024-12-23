@@ -57,7 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .with(tracing_subscriber::fmt::layer())
         .init();
     let signer = Signer::new(read_private_key(&cli.private_key).expect("failed to read key"));
-    let archiver = SimpleArchiver::new(&cli.archive_folder)?;
+    let archiver = SimpleArchiver::new(cli.archive_folder)?;
     let state = Arc::from(AppState { signer, archiver });
 
     let app = Router::new()
@@ -136,10 +136,10 @@ pub struct SimpleArchiver {
 }
 
 impl SimpleArchiver {
-    pub fn new(directory: &PathBuf) -> Result<Self, std::io::Error> {
+    pub fn new(directory: PathBuf) -> Result<Self, std::io::Error> {
         match Path::exists(Path::new(&directory)) {
             true => Ok(Self {
-                directory: directory.to_owned(),
+                directory,
             }),
             false => Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
