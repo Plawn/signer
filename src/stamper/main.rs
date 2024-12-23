@@ -120,15 +120,15 @@ pub struct SimpleArchiver {
 
 impl SimpleArchiver {
     pub fn new(directory: &PathBuf) -> Result<Self, std::io::Error> {
-        if Path::exists(&Path::new(&directory)) {
-            return Ok(Self {
+        match Path::exists(Path::new(&directory)) {
+            true => Ok(Self {
                 directory: directory.to_owned(),
-            });
+            }),
+            false => Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "folder not found",
+            )),
         }
-        Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "folder not found",
-        ))
     }
 }
 impl Archiver for SimpleArchiver {
@@ -138,8 +138,8 @@ impl Archiver for SimpleArchiver {
         let filename = self.directory.as_path().join(uid + ".json");
         // TODO: clean
         println!("trying to archive at {:?}", &filename);
-        let f = File::create(filename).expect("failed to open file");
-        serde_json::to_writer_pretty(f, &item).expect("failed to archive");
+        let f = File::create(filename).map_err(|_| ArchiveError)?;
+        serde_json::to_writer_pretty(f, &item).map_err(|_| ArchiveError)?;
         Ok(())
     }
 }

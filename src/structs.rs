@@ -109,7 +109,7 @@ impl TryFrom<&Vec<u8>> for SignedSignRequestSerialyzed {
     type Error = crate::errors::SignInfrastructureError;
 
     fn try_from(value: &Vec<u8>) -> Result<Self, Self::Error> {
-        let res: Result<Self, serde_json::Error> = serde_json::from_slice(&value);
+        let res: Result<Self, serde_json::Error> = serde_json::from_slice(value);
         match res {
             Ok(r) => Ok(r),
             Err(_) => Err(crate::errors::SignInfrastructureError::InvalidStruct),
