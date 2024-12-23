@@ -32,7 +32,7 @@ impl Serializer {
         }
     }
 
-    pub fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, SignInfrastructureError> {
+    pub fn deserialize<T: DeserializeOwned>(&self, data: &[u8]) -> Result<T, SignInfrastructureError> {
         match self {
             Serializer::JSON => Ok(serde_json::from_slice(data)?),
         }
@@ -105,11 +105,11 @@ pub struct SignedSignRequestSerialyzed {
     signature: SignatureSerialyzed,
 }
 
-impl TryFrom<&Vec<u8>> for SignedSignRequestSerialyzed {
+impl TryFrom<&[u8]> for SignedSignRequestSerialyzed {
     type Error = crate::errors::SignInfrastructureError;
 
-    fn try_from(value: &Vec<u8>) -> Result<Self, Self::Error> {
-        match DEFAULT_SERIALYZER.deserialize(&value) {
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        match DEFAULT_SERIALYZER.deserialize(value) {
             Ok(r) => Ok(r),
             Err(_) => Err(crate::errors::SignInfrastructureError::InvalidStruct),
         }
@@ -163,12 +163,9 @@ impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
     type Error = crate::errors::SignInfrastructureError;
 
     fn try_from(value: SignedSignRequestSerialyzed) -> Result<Self, Self::Error> {
-        let s: SignRequest = value.sign_request.try_into()?;
-        // TODO: remove unwrap
-        let v: Signature = value.signature.try_into()?;
         Ok(Self {
-            sign_request: s,
-            signature: v,
+            sign_request: value.sign_request.try_into()?,
+            signature: value.signature.try_into()?,
         })
     }
 }

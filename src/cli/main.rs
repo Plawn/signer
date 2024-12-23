@@ -83,6 +83,9 @@ enum Commands {
         key: PathBuf,
         /// Path to data to be signed
         data: PathBuf,
+        /// Adress of the front server
+        #[arg(long, default_value = "http://localhost:4000")]
+        at: String,
     },
     CheckResult {
         /// Path to signature
@@ -160,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
             let checker = Checker::new(read_public_key(&key)?);
             // TODO: move to [SignedSignRequest]
             let req: SignedSignRequest =
-                SignedSignRequestSerialyzed::try_from(&read_file(&sign_request_path)?)?
+                SignedSignRequestSerialyzed::try_from(read_file(&sign_request_path)?.as_ref())?
                     .try_into()?;
             let j = req.sign_request.get_sign_image()?;
             match checker.check(&j, &req.signature) {
@@ -172,9 +175,7 @@ async fn main() -> anyhow::Result<()> {
                 None => Err(anyhow!("signature invalid"))?,
             }
         }
-        Commands::Sign { key, data } => {
-            // default value
-            let at = "http://localhost:4000".to_owned();
+        Commands::Sign { key, data, at } => {
             let client = SignClient::new(at, read_private_key(&key)?);
             let result = client.sign(read_file(&data)?).await?;
             println!("{}", serde_json::to_string(&result)?);

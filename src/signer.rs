@@ -26,7 +26,7 @@ impl Signer {
         Ok(SignedSignRequest::create(req, signature))
     }
 
-    pub fn sign(&self, bytes: &Vec<u8>) -> Signature {
+    pub fn sign(&self, bytes: &[u8]) -> Signature {
         let signature = self.key.sign(bytes);
         Signature {
             algorithm: SignAlgorithm::ED25519,

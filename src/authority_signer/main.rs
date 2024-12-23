@@ -91,8 +91,8 @@ async fn sign(
     log::debug!("Request has been archived by stamper: {:?}", result);
     match result {
         true => {
-            let payload_data = &payload.sign_request.data.to_vec().unwrap();
-            let base = SignedSignRequestSerialyzed::try_from(payload_data)
+            let payload_data = payload.sign_request.data.to_vec().unwrap();
+            let base = SignedSignRequestSerialyzed::try_from(payload_data.as_ref())
                 .expect("failed to extract base query");
             let to_be_signed = &base.sign_request.data.to_vec().unwrap();
             let signed = state.signer.sign(to_be_signed);

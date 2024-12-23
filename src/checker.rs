@@ -14,7 +14,7 @@ impl Checker {
         Self { key: pub_key }
     }
 
-    pub fn check(&self, data: &Vec<u8>, signature: &Signature) -> Option<bool> {
+    pub fn check(&self, data: &[u8], signature: &Signature) -> Option<bool> {
         match self.key.verify(data, &signature.value) {
             Ok(_) => Some(true),
             Err(_) => None,
