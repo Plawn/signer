@@ -1,5 +1,4 @@
-
-
+use crate::errors::SignInfrastructureError;
 use std::{convert::Infallible, error, fmt, fs::File, io::Read, path::PathBuf};
 
 use ring::signature;
@@ -7,7 +6,8 @@ use xitca_web::{
     error::{Error, MatchError},
     handler::{html::Html, Responder},
     http::{StatusCode, WebResponse},
-    service::Service, WebContext,
+    service::Service,
+    WebContext,
 };
 
 // a custom error type. must implement following traits:
@@ -65,8 +65,6 @@ impl<'r, C> Service<WebContext<'r, C>> for MyError {
 //     }
 // }
 
-
-
 // a middleware function used for intercept and interact with app handler outputs.
 pub async fn error_handler<S, C>(s: &S, mut ctx: WebContext<'_, C>) -> Result<WebResponse, Error<C>>
 where
@@ -120,29 +118,23 @@ where
     }
 }
 
-
-pub fn read_file(path: &PathBuf) -> Result<Vec<u8>, anyhow::Error> {
+pub fn read_file(path: &PathBuf) -> Result<Vec<u8>, std::io::Error> {
     let mut f = File::open(path)?;
     let mut res = vec![];
     f.read_to_end(&mut res)?;
     Ok(res)
 }
 
-use anyhow::{anyhow};
-
-pub fn read_private_key(path: PathBuf) -> Result<signature::Ed25519KeyPair, anyhow::Error> {
-    let mut f = File::open(path)?;
-    let mut pkcs8_bytes = vec![];
-    f.read_to_end(&mut pkcs8_bytes)?;
-    let key = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
-        .map_err(|e| anyhow!("error reading key"))?;
-    Ok(key)
+pub fn read_private_key(
+    path: &PathBuf,
+) -> Result<signature::Ed25519KeyPair, SignInfrastructureError> {
+    Ok(signature::Ed25519KeyPair::from_pkcs8(&read_file(path)?)?)
 }
 
-pub fn read_public_key(path: PathBuf) -> Result<signature::UnparsedPublicKey<Vec<u8>>, anyhow::Error> {
-    let mut f = File::open(path)?;
-    let mut pub_key = vec![];
-    f.read_to_end(&mut pub_key)?;
-    let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, pub_key);
+pub fn read_public_key(
+    path: &PathBuf,
+) -> Result<signature::UnparsedPublicKey<Vec<u8>>, anyhow::Error> {
+    let content = read_file(path)?;
+    let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, content);
     Ok(peer_public_key)
 }

@@ -1,13 +1,5 @@
-use anyhow::anyhow;
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-
-#[derive(Deserialize, Serialize)]
-pub struct TimestampedData {
-    // bae
-    pub data: StringBytes,
-    pub signature: StringBytes,
-}
 
 /// Base 64 encoded byte array
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -23,21 +15,6 @@ impl From<Vec<u8>> for StringBytes {
     fn from(value: Vec<u8>) -> Self {
         let result = URL_SAFE.encode(value);
         Self(result)
-    }
-}
-
-impl Default for TimestampedData {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TimestampedData {
-    pub fn new() -> Self {
-        Self {
-            data: StringBytes::from(vec![1, 2, 3]),
-            signature: StringBytes::from(vec![1, 2, 3]),
-        }
     }
 }
 
@@ -67,9 +44,9 @@ pub struct SignRequestSerialyzed {
     serialyzer: Serializer,
 }
 
-#[derive(Debug, Clone)]
 /// Struct to be used when processed
 /// Only has data field for now, but all the metadata can then be added later on
+#[derive(Debug, Clone)]
 pub struct SignRequest {
     pub data: Vec<u8>,
     pub serialyzer: Serializer,
@@ -126,9 +103,15 @@ pub struct SignedSignRequestSerialyzed {
     signature: SignatureSerialyzed,
 }
 
-impl From<&Vec<u8>> for SignedSignRequestSerialyzed {
-    fn from(value: &Vec<u8>) -> Self {
-        serde_json::from_slice(value).unwrap()
+impl TryFrom<&Vec<u8>> for SignedSignRequestSerialyzed {
+    type Error = crate::errors::SignInfrastructureError;
+
+    fn try_from(value: &Vec<u8>) -> Result<Self, Self::Error> {
+        let res: Result<Self, serde_json::Error> = serde_json::from_slice(&value);
+        match res {
+            Ok(r) => Ok(r),
+            Err(_) => Err(crate::errors::SignInfrastructureError::InvalidStruct),
+        }
     }
 }
 
@@ -155,6 +138,17 @@ impl TryFrom<SignatureSerialyzed> for Signature {
     }
 }
 
+impl TryFrom<Vec<u8>> for SignatureSerialyzed {
+    type Error = crate::errors::SignInfrastructureError;
+    
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        match serde_json::from_slice(&value) {
+            Ok(s) => Ok(s),
+            Err(_) => Err(crate::errors::SignInfrastructureError::InvalidStruct),
+        }
+    }
+}
+
 impl From<SignedSignRequest> for SignedSignRequestSerialyzed {
     fn from(value: SignedSignRequest) -> Self {
         Self {
@@ -164,19 +158,13 @@ impl From<SignedSignRequest> for SignedSignRequestSerialyzed {
     }
 }
 
-#[derive(Debug)]
-pub struct InvalidSignedSignRequestSerialyzed;
-
 impl TryFrom<SignedSignRequestSerialyzed> for SignedSignRequest {
     type Error = crate::errors::SignInfrastructureError;
 
-
     fn try_from(value: SignedSignRequestSerialyzed) -> Result<Self, Self::Error> {
-        let s: SignRequest = value
-            .sign_request
-            .try_into()?;
+        let s: SignRequest = value.sign_request.try_into()?;
         // TODO: remove unwrap
-        let v: Signature = value.signature.try_into().unwrap();
+        let v: Signature = value.signature.try_into()?;
         Ok(Self {
             sign_request: s,
             signature: v,
@@ -199,7 +187,7 @@ impl SignRequest {
 
     pub fn from_bytes(data: Vec<u8>) -> Result<Self, anyhow::Error> {
         let d: SignRequestSerialyzed = DEFAULT_SERIALYZER.deserialize(&data)?;
-        let res: Self = d.try_into().map_err(|e| anyhow!("failed"))?;
+        let res: Self = d.try_into()?;
         Ok(res)
     }
 }

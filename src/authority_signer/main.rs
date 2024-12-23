@@ -25,9 +25,9 @@ fn main() -> std::io::Result<()> {
     // should be key of timestamp server
     let public_key = "CAs/timestamp/public.pem".into();
     // TODO: bad error
-    let signer = Signer::new(read_private_key(private_key).expect("failed to read key"));
+    let signer = Signer::new(read_private_key(&private_key).expect("failed to read key"));
     // TODO: add certificate in state to make it easy to handle the verification
-    let checker = Checker::new(read_public_key(public_key).expect("failed to read key"));
+    let checker = Checker::new(read_public_key(&public_key).expect("failed to read key"));
 
     let state = Arc::from(AppState { checker, signer });
     App::new()
@@ -56,8 +56,10 @@ async fn sign(
     match result {
         Some(v) => match v {
             true => {
-                let base =
-                    SignedSignRequestSerialyzed::from(&payload.sign_request.data.to_vec().unwrap());
+                let base = SignedSignRequestSerialyzed::try_from(
+                    &payload.sign_request.data.to_vec().unwrap(),
+                )
+                .expect("failed to extract base query");
                 let signed = state
                     .signer
                     .sign(&base.sign_request.data.to_vec().unwrap())

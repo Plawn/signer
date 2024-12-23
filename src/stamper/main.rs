@@ -24,7 +24,7 @@ async fn main() {
     let private_key = "CAs/timestamp/key.p8".into();
     let port = 3000;
 
-    let signer = Signer::new(read_private_key(private_key).expect("failed to read key"));
+    let signer = Signer::new(read_private_key(&private_key).expect("failed to read key"));
     let archiver = SimpleArchiver::new("archive");
     // create app state
     let state = Arc::from(AppState { signer, archiver });

@@ -14,8 +14,10 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
-    let authority_addr = "http://localhost8080";
+    // should load from conf
+    let authority_addr = "http://localhost:8080";
     let stamp_addr = "http://localhost:3000";
+
     let state = Arc::from(AppState {
         // add http client here
         stamper_client: StamperClient::new(stamp_addr),
@@ -28,7 +30,10 @@ async fn main() {
         .with_state(state);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:4000").await.unwrap();
+    let port = 4000;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 

@@ -6,8 +6,8 @@ use ata42::{
     errors::SignInfrastructureError,
     signer::Signer,
     structs::{
-        Serializer, SignRequest, SignRequestSerialyzed, SignatureSerialyzed, SignedSignRequest,
-        SignedSignRequestSerialyzed,
+        Serializer, SignRequest, SignRequestSerialyzed, Signature, SignatureSerialyzed,
+        SignedSignRequest, SignedSignRequestSerialyzed,
     },
     utils::{read_file, read_private_key, read_public_key},
 };
@@ -82,6 +82,11 @@ enum Commands {
         key: PathBuf,
         data: PathBuf,
     },
+    CheckResult {
+        signature: PathBuf,
+        to_be_signed: PathBuf,
+        pub_key: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -103,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
             sign_request_path,
             out,
         } => {
-            let signer = Signer::new(read_private_key(key)?);
+            let signer = Signer::new(read_private_key(&key)?);
             let req = SignRequest::from_bytes(read_file(&sign_request_path)?)?;
             let result = signer.sign_request(req)?;
             let for_storage: SignedSignRequestSerialyzed = result.into();
@@ -114,10 +119,11 @@ async fn main() -> anyhow::Result<()> {
             key,
             sign_request_path,
         } => {
-            let checker = Checker::new(read_public_key(key)?);
+            let checker = Checker::new(read_public_key(&key)?);
             // TODO: move to [SignedSignRequest]
             let req: SignedSignRequest =
-                SignedSignRequestSerialyzed::from(&read_file(&sign_request_path)?).try_into()?;
+                SignedSignRequestSerialyzed::try_from(&read_file(&sign_request_path)?)?
+                    .try_into()?;
             let j = req.sign_request.get_sign_image()?;
             match checker.check(&j, &req.signature) {
                 Some(_) => {
@@ -129,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Sign { key, data } => {
             let req = SignRequest::create(read_file(&data)?, Serializer::JSON);
-            let signer = Signer::new(read_private_key(key)?);
+            let signer = Signer::new(read_private_key(&key)?);
             let result = signer.sign_request(req)?;
             let for_storage: SignedSignRequestSerialyzed = result.into();
             let client = reqwest::Client::new();
@@ -142,6 +148,24 @@ async fn main() -> anyhow::Result<()> {
                 .json()
                 .await?;
             println!("{}", serde_json::to_string(&res)?);
+        }
+        Commands::CheckResult {
+            signature,
+            to_be_signed,
+            pub_key,
+        } => {
+            let data = read_file(&to_be_signed)?;
+            let signature: Signature =
+                SignatureSerialyzed::try_from(read_file(&signature)?)?.try_into()?;
+            let checker = Checker::new(read_public_key(&pub_key)?);
+            let res = checker.check(&data, &signature);
+            match res {
+                Some(r) => match r {
+                    true => println!("signature is valid"),
+                    false => eprintln!("signature is invalid"),
+                },
+                None => eprintln!("signature is invalid"),
+            }
         }
     }
     Ok(())
