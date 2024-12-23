@@ -61,9 +61,11 @@ impl StamperClient {
             .send()
             .await
             .inspect(|e| log::debug!("{:?}", e))
+            // TODO fix expect
             .expect("failed to query stamper")
             .json()
             .await
+            // TODO fix expect
             .expect("failed to parse result");
         Ok(stamped)
     }
@@ -92,23 +94,34 @@ impl AuthoritySignerClient {
             .send()
             .await
             .inspect(|e| log::debug!("{:?}", e))
+            // TODO fix expect
             .expect("failed to query stamper")
             .json()
             .await
+            // TODO fix expect
             .expect("failed to parse result");
         Ok(signature)
     }
+}
+
+/// Here we check if the user is authorized to request such signature
+/// for now we always authorize all queries
+fn authorize(_payload: &SignedSignRequestSerialyzed) -> bool {
+    true
 }
 
 async fn handle_signature(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SignedSignRequestSerialyzed>,
 ) -> Json<SignatureSerialyzed> {
-    match state.stamper_client.sign(&payload).await {
-        Ok(stamped) => match state.authority_client.sign(&stamped).await {
-            Ok(signature) => Json(signature),
-            Err(_) => todo!("should be a nice error, the authority signing failed"),
+    match authorize(&payload) {
+        true => match state.stamper_client.sign(&payload).await {
+            Ok(stamped) => match state.authority_client.sign(&stamped).await {
+                Ok(signature) => Json(signature),
+                Err(_) => todo!("should be a nice error, the authority signing failed"),
+            },
+            Err(_) => todo!("should be a nice error, the stamping failed"),
         },
-        Err(_) => todo!("should be a nice error, the stamping failed"),
+        false => todo!("not authorized"),
     }
 }

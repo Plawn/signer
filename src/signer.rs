@@ -1,6 +1,6 @@
 use ring::signature::Ed25519KeyPair;
 
-use crate::structs::{SignAlgorithm, SignRequest, Signature, SignedSignRequest};
+use crate::{errors::SignInfrastructureError, structs::{SignAlgorithm, SignRequest, Signature, SignedSignRequest}};
 
 pub struct Signer {
     key: Ed25519KeyPair,
@@ -11,7 +11,7 @@ impl Signer {
         Self { key }
     }
 
-    pub fn sign_request(&self, req: SignRequest) -> Result<SignedSignRequest, anyhow::Error> {
+    pub fn sign_request(&self, req: SignRequest) -> Result<SignedSignRequest, SignInfrastructureError> {
         let bytes = req.clone().get_sign_image()?;
         let signature = self.key.sign(&bytes);
         let s = signature.as_ref();
@@ -24,26 +24,11 @@ impl Signer {
         ))
     }
 
-    pub fn sign(&self, bytes: &Vec<u8>) -> Result<Signature, anyhow::Error> {
+    pub fn sign(&self, bytes: &Vec<u8>) -> Signature {
         let signature = self.key.sign(bytes);
-        Ok(Signature{
+        Signature {
             algorithm: SignAlgorithm::ED25519,
             value: signature.as_ref().to_vec(),
-        })
+        }
     }
 }
-// fn sign_sign_request(
-//     req: SignRequest,
-//     private_key: Ed25519KeyPair,
-// ) -> Result<SignedSignRequest, anyhow::Error> {
-//     let bytes = req.clone().get_sign_image()?;
-//     let signature = private_key.sign(&bytes);
-//     let s = signature.as_ref();
-//     Ok(SignedSignRequest::create(
-//         req,
-//         Signature {
-//             value: s.to_vec(),
-//             algorithm: ata42::structs::SignAlgorithm::ED25519,
-//         },
-//     ))
-// }

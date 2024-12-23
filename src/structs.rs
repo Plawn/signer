@@ -1,6 +1,8 @@
 use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use crate::errors::SignInfrastructureError;
+
 /// Base 64 encoded byte array
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StringBytes(String);
@@ -24,13 +26,13 @@ pub enum Serializer {
 }
 
 impl Serializer {
-    pub fn serialyze<T: Serialize>(&self, data: &T) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn serialyze<T: Serialize>(&self, data: &T) -> Result<Vec<u8>, SignInfrastructureError> {
         match self {
             Serializer::JSON => Ok(serde_json::to_vec(data)?),
         }
     }
 
-    pub fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, anyhow::Error> {
+    pub fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, SignInfrastructureError> {
         match self {
             Serializer::JSON => Ok(serde_json::from_slice(data)?),
         }
@@ -179,13 +181,13 @@ impl SignRequest {
         Self { data, serialyzer }
     }
 
-    pub fn get_sign_image(self) -> Result<Vec<u8>, anyhow::Error> {
+    pub fn get_sign_image(self) -> Result<Vec<u8>, SignInfrastructureError> {
         let for_storage: SignRequestSerialyzed = self.into();
         let j = DEFAULT_SERIALYZER.serialyze(&for_storage)?;
         Ok(j)
     }
 
-    pub fn from_bytes(data: Vec<u8>) -> Result<Self, anyhow::Error> {
+    pub fn from_bytes(data: Vec<u8>) -> Result<Self, SignInfrastructureError> {
         let d: SignRequestSerialyzed = DEFAULT_SERIALYZER.deserialize(&data)?;
         let res: Self = d.try_into()?;
         Ok(res)
