@@ -5,7 +5,7 @@ use std::sync::Arc;
 use ata42::{
     checker::Checker,
     signer::Signer,
-    structs::{Signature, SignatureSerialyzed, SignedSignRequest, SignedSignRequestSerialyzed, StampedItem},
+    structs::{SignatureSerialyzed, SignedSignRequest, SignedSignRequestSerialyzed},
     utils::{read_private_key, read_public_key, MyError},
 };
 use xitca_web::{
@@ -41,8 +41,6 @@ fn main() -> std::io::Result<()> {
         .wait()
 }
 
-use anyhow::anyhow;
-
 async fn sign(
     StateRef(state): StateRef<'_, AppState>,
     Json(payload): Json<SignedSignRequestSerialyzed>,
@@ -58,7 +56,8 @@ async fn sign(
     match result {
         Some(v) => match v {
             true => {
-                let base = SignedSignRequestSerialyzed::from(&payload.sign_request.data.to_vec().unwrap());
+                let base =
+                    SignedSignRequestSerialyzed::from(&payload.sign_request.data.to_vec().unwrap());
                 let signed = state
                     .signer
                     .sign(&base.sign_request.data.to_vec().unwrap())

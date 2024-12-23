@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ata42::structs::{Signature, SignatureSerialyzed, SignedSignRequestSerialyzed};
+use ata42::structs::{SignatureSerialyzed, SignedSignRequestSerialyzed};
 use axum::{
     extract::State,
     routing::{get, post},
@@ -8,14 +8,18 @@ use axum::{
 };
 
 struct AppState {
-    client: reqwest::Client,
+    stamper_client: StamperClient,
+    authority_client: AuthoritySignerClient,
 }
 
 #[tokio::main]
 async fn main() {
+    let authority_addr = "http://localhost8080";
+    let stamp_addr = "http://localhost:3000";
     let state = Arc::from(AppState {
         // add http client here
-        client: reqwest::Client::new(),
+        stamper_client: StamperClient::new(stamp_addr),
+        authority_client: AuthoritySignerClient::new(authority_addr),
     });
 
     let app = Router::new()
@@ -28,38 +32,77 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
+struct StamperClient {
+    client: reqwest::Client,
+    at: String,
+}
+
+impl StamperClient {
+    pub fn new(at: &str) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            at: at.to_owned(),
+        }
+    }
+
+    pub async fn sign(
+        &self,
+        payload: &SignedSignRequestSerialyzed,
+    ) -> Result<SignedSignRequestSerialyzed, ()> {
+        let stamped: SignedSignRequestSerialyzed = self
+            .client
+            .post(format!("{}/sign", self.at))
+            .json(payload)
+            .send()
+            .await
+            .inspect(|e| log::debug!("{:?}", e))
+            .expect("failed to query stamper")
+            .json()
+            .await
+            .expect("failed to parse result");
+        Ok(stamped)
+    }
+}
+
+struct AuthoritySignerClient {
+    client: reqwest::Client,
+    at: String,
+}
+
+impl AuthoritySignerClient {
+    pub fn new(at: &str) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            at: at.to_owned(),
+        }
+    }
+    pub async fn sign(
+        &self,
+        stamped: &SignedSignRequestSerialyzed,
+    ) -> Result<SignatureSerialyzed, ()> {
+        let signature: SignatureSerialyzed = self
+            .client
+            .post(format!("{}/sign", self.at))
+            .json(stamped)
+            .send()
+            .await
+            .expect("failed to query stamper")
+            .json()
+            .await
+            .expect("failed to parse result");
+        Ok(signature)
+    }
+}
+
 async fn handle_signature(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<SignedSignRequestSerialyzed>,
 ) -> Json<SignatureSerialyzed> {
-    // here it is stamped
-    // we can use the result to call the authority server
-    let stamped: SignedSignRequestSerialyzed = state
-        .client
-        .post("http://localhost:3000/sign")
-        .json(&payload)
-        .send()
-        .await
-        .inspect(|e| println!("{:?}", e))
-        .expect("failed to query stamper")
-        .json()
-        .await
-        .expect("failed to parse result");
-
-    let signature: SignatureSerialyzed = state
-        .client
-        .post("http://localhost:8080/sign")
-        .json(&stamped)
-        .send()
-        .await
-        .expect("failed to query stamper")
-        .json()
-        .await
-        .expect("failed to parse result");
-    // get signed request
-    // send to stamp
-    // with result
-    // send to autority
-    // respond with final signature
-    Json(signature)
+    match state.stamper_client.sign(&payload).await {
+        Ok(stamped) => match state.authority_client.sign(&stamped).await {
+            Ok(signature) => Json(signature),
+            Err(_) => todo!("should be a nice error, the authority signing failed"),
+        },
+        Err(_) => todo!("should be a nice error, the stamping failed"),
+    }
 }
