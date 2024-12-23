@@ -19,7 +19,9 @@ stamper {
 }
 
 front {
-
+    authorize {
+        
+    }
 }
 
 user {
@@ -33,11 +35,11 @@ user {
 }
 
 
-user -> front {
+user -> front.authorize {
     label: "(1) Send signed request"
 }
 
-front -> stamper {
+front.authorize -> stamper {
     label: (2) "Send to stamper for archive and signing approval"
 }
 
