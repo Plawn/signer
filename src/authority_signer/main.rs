@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use ata42::{
-    checker::Checker, signer::Signer, structs::{SignedData, SignedSignRequest, SignedSignRequestSerialyzed, TimestampedData}, utils::{read_private_key, read_public_key, MyError}
+    checker::Checker,
+    signer::Signer,
+    structs::{Signature, SignatureSerialyzed, SignedSignRequest, SignedSignRequestSerialyzed, StampedItem},
+    utils::{read_private_key, read_public_key, MyError},
 };
 use xitca_web::{
     handler::{handler_service, json::Json, state::StateRef},
@@ -18,20 +21,18 @@ struct AppState {
 
 fn main() -> std::io::Result<()> {
     let private_key = "CAs/signer/key.p8".into();
-    
-    
-    let public_key = "CAs/user/public.pem".into();
+
+    // should be key of timestamp server
+    let public_key = "CAs/timestamp/public.pem".into();
     // TODO: bad error
     let signer = Signer::new(read_private_key(private_key).expect("failed to read key"));
     // TODO: add certificate in state to make it easy to handle the verification
     let checker = Checker::new(read_public_key(public_key).expect("failed to read key"));
-    
-    let state = Arc::from(AppState {
-        checker,
-        signer,
-    });
+
+    let state = Arc::from(AppState { checker, signer });
     App::new()
         .with_state(state)
+        .at("/ping", get(handler_service(async || "pong")))
         .at("/sign", post(handler_service(sign)))
         .enclosed_fn(ata42::utils::error_handler)
         .serve()
@@ -45,9 +46,9 @@ use anyhow::anyhow;
 async fn sign(
     StateRef(state): StateRef<'_, AppState>,
     Json(payload): Json<SignedSignRequestSerialyzed>,
-) -> Result<Json<SignedData>, MyError> {
+) -> Result<Json<SignatureSerialyzed>, MyError> {
     println!("signed request: {:?}", payload);
-    let value: SignedSignRequest = payload.try_into().unwrap();
+    let value: SignedSignRequest = payload.clone().try_into().unwrap();
     println!("got request: {:?}", value.signature);
     let result = state.checker.check(
         &value.sign_request.get_sign_image().unwrap(),
@@ -57,8 +58,12 @@ async fn sign(
     match result {
         Some(v) => match v {
             true => {
-                // should sign here
-                Ok(Json(SignedData::new()))
+                let base = SignedSignRequestSerialyzed::from(&payload.sign_request.data.to_vec().unwrap());
+                let signed = state
+                    .signer
+                    .sign(&base.sign_request.data.to_vec().unwrap())
+                    .expect("failed to sign");
+                Ok(Json(signed.into()))
             }
             false => Err(MyError(anyhow::Error::msg("Failed"))),
         },

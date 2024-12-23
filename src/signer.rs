@@ -11,7 +11,7 @@ impl Signer {
         Self { key }
     }
 
-    pub fn sign(&self, req: SignRequest) -> Result<SignedSignRequest, anyhow::Error> {
+    pub fn sign_request(&self, req: SignRequest) -> Result<SignedSignRequest, anyhow::Error> {
         let bytes = req.clone().get_sign_image()?;
         let signature = self.key.sign(&bytes);
         let s = signature.as_ref();
@@ -22,6 +22,14 @@ impl Signer {
                 algorithm: SignAlgorithm::ED25519,
             },
         ))
+    }
+
+    pub fn sign(&self, bytes: &Vec<u8>) -> Result<Signature, anyhow::Error> {
+        let signature = self.key.sign(&bytes);
+        Ok(Signature{
+            algorithm: SignAlgorithm::ED25519,
+            value: signature.as_ref().to_vec(),
+        })
     }
 }
 // fn sign_sign_request(

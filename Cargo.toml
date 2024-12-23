@@ -13,6 +13,9 @@ anyhow = "1.0.94"
 base64 = "0.22.1"
 axum = "0.7.9"
 clap = { version = "4.5.23", features = ["derive"] }
+uuidv7 = "0.1.5"
+tokio = "1.42.0"
+reqwest = {version = "0.12.9", features = ["json", "rustls-tls"]}
 
 [[bin]]
 name = "cli"
@@ -26,6 +29,11 @@ path = "src/authority_signer/main.rs"
 [[bin]]
 name = "stamper"
 path = "src/stamper/main.rs"
+
+[[bin]]
+name = "front"
+path = "src/front_server/main.rs"
+
 
 [profile.release]
 strip = true

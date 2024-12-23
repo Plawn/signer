@@ -10,7 +10,7 @@ pub struct TimestampedData {
 }
 
 /// Base 64 encoded byte array
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct StringBytes(String);
 
 impl StringBytes {
@@ -35,19 +35,6 @@ impl TimestampedData {
         }
     }
 }
-#[derive(Deserialize, Serialize)]
-pub struct SignedData {
-    // base64 encoded signature
-    signature: StringBytes,
-}
-
-impl SignedData {
-    pub fn new() -> Self {
-        Self {
-            signature: StringBytes::from(vec![1, 2, 3]),
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Serializer {
@@ -68,10 +55,10 @@ impl Serializer {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 /// In order to be on the wire or stored
 pub struct SignRequestSerialyzed {
-    data: StringBytes,
+    pub data: StringBytes,
     serialyzer: Serializer,
 }
 
@@ -118,7 +105,7 @@ pub struct Signature {
     pub value: Vec<u8>,
 }
 
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct SignatureSerialyzed {
     pub algorithm: SignAlgorithm,
     pub value: StringBytes,
@@ -129,10 +116,16 @@ pub struct SignedSignRequest {
     pub signature: Signature,
 }
 
-#[derive(Serialize, Debug, Deserialize)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 pub struct SignedSignRequestSerialyzed {
-    sign_request: SignRequestSerialyzed,
+    pub sign_request: SignRequestSerialyzed,
     signature: SignatureSerialyzed,
+}
+
+impl From<&Vec<u8>> for SignedSignRequestSerialyzed {
+    fn from(value: &Vec<u8>) -> Self {
+        serde_json::from_slice(&value).unwrap()
+    }
 }
 
 impl From<Signature> for SignatureSerialyzed {
@@ -216,3 +209,11 @@ impl SignedSignRequest {
         }
     }
 }
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StampedItem {
+    pub request: SignedSignRequestSerialyzed,
+    pub response: SignedSignRequestSerialyzed,
+}
+

@@ -9,7 +9,7 @@ use ata42::{
     checker::Checker,
     signer::Signer,
     structs::{
-        Serializer, SignRequest, SignRequestSerialyzed, SignedSignRequest,
+        Serializer, SignRequest, SignRequestSerialyzed, SignatureSerialyzed, SignedSignRequest,
         SignedSignRequestSerialyzed,
     },
     utils::{read_file, read_private_key, read_public_key},
@@ -89,6 +89,10 @@ enum Commands {
         /// Path to the signed sign request
         sign_request_path: PathBuf,
     },
+    Sign {
+        key: PathBuf,
+        data: PathBuf,
+    },
 }
 
 fn read_signed_sign_request_from_file(path: PathBuf) -> Result<SignedSignRequest, anyhow::Error> {
@@ -98,15 +102,16 @@ fn read_signed_sign_request_from_file(path: PathBuf) -> Result<SignedSignRequest
     Ok(value)
 }
 
-
-pub fn read_signed_sign_request_from_bytes(data: Vec<u8>) -> Result<SignedSignRequest, anyhow::Error> {
+pub fn read_signed_sign_request_from_bytes(
+    data: Vec<u8>,
+) -> Result<SignedSignRequest, anyhow::Error> {
     let v: SignedSignRequestSerialyzed = serde_json::from_slice(&data)?;
     let value: SignedSignRequest = v.try_into().map_err(|e| anyhow!("error"))?;
     Ok(value)
 }
 
-
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -126,7 +131,7 @@ fn main() -> anyhow::Result<()> {
         } => {
             let signer = Signer::new(read_private_key(key)?);
             let req = SignRequest::from_bytes(read_file(&sign_request_path)?)?;
-            let result = signer.sign(req)?;
+            let result = signer.sign_request(req)?;
             let for_storage: SignedSignRequestSerialyzed = result.into();
             let output = File::create(out)?;
             serde_json::to_writer_pretty(output, &for_storage)?;
@@ -146,6 +151,22 @@ fn main() -> anyhow::Result<()> {
                 }
                 None => Err(anyhow!("signature invalid"))?,
             }
+        }
+        Commands::Sign { key, data } => {
+            let req = SignRequest::create(read_file(&data)?, Serializer::JSON);
+            let signer = Signer::new(read_private_key(key)?);
+            let result = signer.sign_request(req)?;
+            let for_storage: SignedSignRequestSerialyzed = result.into();
+            let client = reqwest::Client::new();
+            let res: SignatureSerialyzed = client
+                // addr should be option
+                .post("http://localhost:4000/sign")
+                .json(&for_storage)
+                .send()
+                .await?
+                .json()
+                .await?;
+            println!("{}", serde_json::to_string(&res)?);
         }
     }
     Ok(())
