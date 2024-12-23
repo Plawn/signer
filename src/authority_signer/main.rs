@@ -63,8 +63,8 @@ fn main() -> std::io::Result<()> {
         .at("/live", get(handler_service(async || "OK")))
         .at("/sign", post(handler_service(sign)))
         // .enclosed(Logger::new())
+        .enclosed_fn(ata42::utils::error_handler)
         .enclosed(TowerHttpCompat::new(TraceLayer::new_for_http()))
-        // .enclosed_fn(ata42::utils::error_handler)
         .serve()
         .bind(format!("0.0.0.0:{}", &cli.port))?
         .run()
