@@ -1,0 +1,54 @@
+
+
+authority {
+    private_key {
+        
+    }
+    public_key {
+
+    }
+}
+
+stamper {
+    private_key {
+        
+    }
+    public_key {
+
+    }
+}
+
+front {
+
+}
+
+user {
+    shape: person
+    private_key {
+
+    }
+    public_key {
+
+    }
+}
+
+
+user -> front {
+    label: "(1) Send signed request"
+}
+
+front -> stamper {
+    label: (2) "Send to stamper for archive and signing approval"
+}
+
+front -> authority  {
+    label: "(4) Send to signer for final real signing"
+}
+
+stamper -> archive {
+    label: "(3) Archive request and response"
+}
+
+front -> user {
+    label: "(5) Respond with signature"
+}
