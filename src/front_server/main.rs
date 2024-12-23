@@ -6,26 +6,39 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use clap::Parser;
 
 struct AppState {
     stamper_client: StamperClient,
     authority_client: AuthoritySignerClient,
 }
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// address of the authority server
+    #[arg(long)]
+    authority_address: String,
+    /// address of the stamp server
+    #[arg(long)]
+    stamp_address: String,
+
+    #[arg(long, default_value = "4000")]
+    port: u32,
+}
+
 #[tokio::main]
 async fn main() {
-    // should load from conf
-    let authority_addr = "http://localhost:8080";
-    let stamp_addr = "http://localhost:3000";
+    let cli = Cli::parse();
 
     let state = Arc::from(AppState {
         // add http client here
-        stamper_client: StamperClient::new(stamp_addr),
-        authority_client: AuthoritySignerClient::new(authority_addr),
+        stamper_client: StamperClient::new(&cli.stamp_address),
+        authority_client: AuthoritySignerClient::new(&cli.authority_address),
     });
 
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
+        .route("/live", get(|| async { "OK" }))
         .route("/sign", post(handle_signature))
         .with_state(state);
 

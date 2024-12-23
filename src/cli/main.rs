@@ -79,14 +79,52 @@ enum Commands {
         sign_request_path: PathBuf,
     },
     Sign {
+        /// Path to user private key
         key: PathBuf,
+        /// Path to data to be signed
         data: PathBuf,
     },
     CheckResult {
+        /// Path to signature
         signature: PathBuf,
+        /// Path to data to be signed
         to_be_signed: PathBuf,
+        /// Path to public key server
         pub_key: PathBuf,
     },
+}
+
+pub struct SignClient {
+    client: reqwest::Client,
+    key: signature::Ed25519KeyPair,
+    at: String,
+}
+
+impl SignClient {
+    pub async fn sign(self, data: Vec<u8>) -> Result<SignatureSerialyzed, SignInfrastructureError> {
+        let req = SignRequest::create(data, Serializer::JSON);
+        let signer = Signer::new(self.key);
+        let result = signer.sign_request(req)?;
+        let for_storage: SignedSignRequestSerialyzed = result.into();
+        let res: SignatureSerialyzed = self
+            .client
+            // addr should be option
+            .post(format!("{}/sign", &self.at))
+            .json(&for_storage)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Ok(res)
+    }
+
+    pub fn new(at: String, private_key: signature::Ed25519KeyPair) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            key: private_key,
+            at,
+        }
+    }
 }
 
 #[tokio::main]
@@ -130,24 +168,16 @@ async fn main() -> anyhow::Result<()> {
                     println!("signature valid");
                     return Ok(());
                 }
+                // better error
                 None => Err(anyhow!("signature invalid"))?,
             }
         }
         Commands::Sign { key, data } => {
-            let req = SignRequest::create(read_file(&data)?, Serializer::JSON);
-            let signer = Signer::new(read_private_key(&key)?);
-            let result = signer.sign_request(req)?;
-            let for_storage: SignedSignRequestSerialyzed = result.into();
-            let client = reqwest::Client::new();
-            let res: SignatureSerialyzed = client
-                // addr should be option
-                .post("http://localhost:4000/sign")
-                .json(&for_storage)
-                .send()
-                .await?
-                .json()
-                .await?;
-            println!("{}", serde_json::to_string(&res)?);
+            // default value
+            let at = "http://localhost:4000".to_owned();
+            let client = SignClient::new(at, read_private_key(&key)?);
+            let result = client.sign(read_file(&data)?).await?;
+            println!("{}", serde_json::to_string(&result)?);
         }
         Commands::CheckResult {
             signature,

@@ -18,6 +18,8 @@ pub enum SignInfrastructureError {
     Unknown,
     #[error("Archive error")]
     ArchiveError,
+    #[error("Network error")]
+    Network(#[from] reqwest::Error),
 }
 
 impl From<ring::error::KeyRejected> for SignInfrastructureError {

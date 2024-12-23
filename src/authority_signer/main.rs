@@ -1,16 +1,16 @@
 #![feature(error_generic_member_access, error_reporter)]
 
-use std::sync::Arc;
-
 use ata42::{
     checker::Checker,
     signer::Signer,
     structs::{SignatureSerialyzed, SignedSignRequest, SignedSignRequestSerialyzed},
     utils::{read_private_key, read_public_key, MyError},
 };
+use clap::Parser;
+use std::{path::PathBuf, sync::Arc};
 use xitca_web::{
     handler::{handler_service, json::Json, state::StateRef},
-    route::post,
+    route::{get, post},
     App,
 };
 
@@ -19,23 +19,31 @@ struct AppState {
     signer: ata42::signer::Signer,
 }
 
-fn main() -> std::io::Result<()> {
-    let private_key = "CAs/signer/key.p8".into();
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[arg(long)]
+    private_key: PathBuf,
+    #[arg(long)]
+    public_key: PathBuf,
+    #[arg(long)]
+    stamp_public_key: PathBuf,
+    #[arg(long, default_value = "8080")]
+    port: u32,
+}
 
-    // should be key of timestamp server
-    let public_key = "CAs/timestamp/public.pem".into();
-    // TODO: bad error
-    let signer = Signer::new(read_private_key(&private_key).expect("failed to read key"));
-    // TODO: add certificate in state to make it easy to handle the verification
-    let checker = Checker::new(read_public_key(&public_key).expect("failed to read key"));
-    let port = 8080;
+fn main() -> std::io::Result<()> {
+    let cli = Cli::parse();
+    let signer = Signer::new(read_private_key(&cli.private_key).expect("failed to read key"));
+    let checker = Checker::new(read_public_key(&cli.stamp_public_key).expect("failed to read key"));
     let state = Arc::from(AppState { checker, signer });
     App::new()
         .with_state(state)
+        .at("/live", get(handler_service(async || "OK")))
         .at("/sign", post(handler_service(sign)))
         .enclosed_fn(ata42::utils::error_handler)
         .serve()
-        .bind(format!("0.0.0.0:{}", port))?
+        .bind(format!("0.0.0.0:{}", &cli.port))?
         .run()
         .wait()
 }

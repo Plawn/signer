@@ -1,10 +1,13 @@
-use std::{fs::File, sync::Arc};
-
 use ata42::{
     errors::SignInfrastructureError,
     signer::Signer,
     structs::{Serializer, SignRequest, SignedSignRequestSerialyzed, StampedItem},
     utils::read_private_key,
+};
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 
 struct AppState {
@@ -18,30 +21,39 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use clap::Parser;
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[arg(long)]
+    private_key: PathBuf,
+    #[arg(long)]
+    public_key: PathBuf,
+    #[arg(long, default_value = "3000")]
+    port: u32,
+    #[arg(long, default_value = "archive")]
+    archive_folder: PathBuf,
+}
 
 #[tokio::main]
-async fn main() {
-    let private_key = "CAs/timestamp/key.p8".into();
-    let port = 3000;
+async fn main() -> Result<(), anyhow::Error> {
+    let cli = Cli::parse();
 
-    let signer = Signer::new(read_private_key(&private_key).expect("failed to read key"));
-    let archiver = SimpleArchiver::new("archive");
-    // create app state
+    let signer = Signer::new(read_private_key(&cli.private_key).expect("failed to read key"));
+    let archiver = SimpleArchiver::new(&cli.archive_folder)?;
     let state = Arc::from(AppState { signer, archiver });
 
-    // create server using axum this time for comparison
-
-    // create endpoint
-    // build our application with a single route
     let app = Router::new()
-        .route("/", get(|| async { "Hello, World!" }))
+        .route("/live", get(|| async { "OK" }))
         .route("/sign", post(sign))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &port))
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &cli.port))
         .await
         .unwrap();
     axum::serve(listener, app).await.unwrap();
+    Ok(())
 }
 
 impl From<ArchiveError> for SignInfrastructureError {
@@ -103,23 +115,29 @@ trait Archiver {
 }
 
 pub struct SimpleArchiver {
-    directory: String,
+    directory: PathBuf,
 }
 
 impl SimpleArchiver {
-    pub fn new(directory: &str) -> Self {
-        Self {
-            directory: directory.to_owned(),
+    pub fn new(directory: &PathBuf) -> Result<Self, std::io::Error> {
+        if Path::exists(&Path::new(&directory)) {
+            return Ok(Self {
+                directory: directory.to_owned(),
+            });
         }
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "folder not found",
+        ))
     }
 }
 impl Archiver for SimpleArchiver {
     fn archive(&self, item: StampedItem) -> Result<(), ArchiveError> {
         // push to local directory
         let uid = uuidv7::create();
-        let filename = format!("{}/{}.json", self.directory, uid);
+        let filename = self.directory.as_path().join(uid + ".json");
         // TODO: clean
-        println!("trying to archive at {}", &filename);
+        println!("trying to archive at {:?}", &filename);
         let f = File::create(filename).expect("failed to open file");
         serde_json::to_writer_pretty(f, &item).expect("failed to archive");
         Ok(())

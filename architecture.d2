@@ -1,21 +1,48 @@
-
-
 authority {
-    private_key {
+
+
+    keys {
+        grid-columns: 1
+        private_key {
         
+        }
+        public_key {
+    
+        }
     }
-    public_key {
+
+    authorize {
+
+    }
+
+    sign {
+
+    }
+
+    authorize -> sign {
+
+    }
+
+    authorize <- sign {
+
+    }
+
+    keys.private_key -> sign {
 
     }
 }
 
 stamper {
-    private_key {
-        
-    }
-    public_key {
 
+    keys {
+        private_key {
+        
+        }
+        public_key {
+    
+        }
     }
+    
 }
 
 front {
@@ -43,7 +70,11 @@ front.authorize -> stamper {
     label: (2) "Send to stamper for archive and signing approval"
 }
 
-front -> authority  {
+stamper -> front.authorize {
+
+}
+
+front -> authority.authorize  {
     label: "(4) Send to signer for final real signing"
 }
 
@@ -51,6 +82,6 @@ stamper -> archive {
     label: "(3) Archive request and response"
 }
 
-front -> user {
+front.authorize -> user {
     label: "(5) Respond with signature"
 }
