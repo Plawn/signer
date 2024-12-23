@@ -8,6 +8,7 @@ use ata42::{
 };
 use clap::Parser;
 use std::{path::PathBuf, sync::Arc};
+use tower_http::trace::TraceLayer;
 use xitca_web::{
     handler::{handler_service, json::Json, state::StateRef},
     route::{get, post},
@@ -31,17 +32,39 @@ struct Cli {
     #[arg(long, default_value = "8080")]
     port: u32,
 }
+use xitca_web::middleware::tower_http_compat::TowerHttpCompat;
+
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 fn main() -> std::io::Result<()> {
     let cli = Cli::parse();
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // axum logs rejections from built-in extractors with the `axum::rejection`
+                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+                format!(
+                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     let signer = Signer::new(read_private_key(&cli.private_key).expect("failed to read key"));
     let checker = Checker::new(read_public_key(&cli.stamp_public_key).expect("failed to read key"));
     let state = Arc::from(AppState { checker, signer });
+
     App::new()
         .with_state(state)
         .at("/live", get(handler_service(async || "OK")))
         .at("/sign", post(handler_service(sign)))
-        .enclosed_fn(ata42::utils::error_handler)
+        // .enclosed(Logger::new())
+        .enclosed(TowerHttpCompat::new(TraceLayer::new_for_http()))
+        // .enclosed_fn(ata42::utils::error_handler)
         .serve()
         .bind(format!("0.0.0.0:{}", &cli.port))?
         .run()

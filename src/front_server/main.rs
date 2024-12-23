@@ -26,10 +26,27 @@ struct Cli {
     #[arg(long, default_value = "4000")]
     port: u32,
 }
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // axum logs rejections from built-in extractors with the `axum::rejection`
+                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+                format!(
+                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let state = Arc::from(AppState {
         // add http client here
@@ -40,11 +57,10 @@ async fn main() {
     let app = Router::new()
         .route("/live", get(|| async { "OK" }))
         .route("/sign", post(handle_signature))
+        .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    // run our app with hyper, listening globally on port 3000
-    let port = 4000;
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &cli.port))
         .await
         .unwrap();
     axum::serve(listener, app).await.unwrap();

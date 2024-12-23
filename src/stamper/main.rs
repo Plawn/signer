@@ -4,11 +4,13 @@ use ata42::{
     structs::{Serializer, SignRequest, SignedSignRequestSerialyzed, StampedItem},
     utils::read_private_key,
 };
+use tower_http::trace::TraceLayer;
 use std::{
     fs::File,
     path::{Path, PathBuf},
     sync::Arc,
 };
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 struct AppState {
     signer: Signer,
@@ -40,6 +42,20 @@ struct Cli {
 async fn main() -> Result<(), anyhow::Error> {
     let cli = Cli::parse();
 
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                // axum logs rejections from built-in extractors with the `axum::rejection`
+                // target, at `TRACE` level. `axum::rejection=trace` enables showing those events
+                format!(
+                    "{}=debug,tower_http=debug,axum::rejection=trace",
+                    env!("CARGO_CRATE_NAME")
+                )
+                .into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
     let signer = Signer::new(read_private_key(&cli.private_key).expect("failed to read key"));
     let archiver = SimpleArchiver::new(&cli.archive_folder)?;
     let state = Arc::from(AppState { signer, archiver });
@@ -47,6 +63,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = Router::new()
         .route("/live", get(|| async { "OK" }))
         .route("/sign", post(sign))
+        .layer(TraceLayer::new_for_http())
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &cli.port))
@@ -96,7 +113,7 @@ async fn sign(
     // TODO: remove expect
     let signed = state.signer.sign_request(req).expect("failed to sign");
     let s: SignedSignRequestSerialyzed = signed.into();
-
+    log::debug!("hello");
     match state.archiver.archive(StampedItem {
         request: payload.clone(),
         response: s.clone(),
