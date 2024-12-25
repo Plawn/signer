@@ -6,7 +6,10 @@ ENV RUSTFLAGS="-C target-feature=-crt-static"
 RUN apk add --no-cache musl-dev
 # set the workdir and copy the source into it
 WORKDIR /app
-COPY ./ /app
+COPY ./Cargo.toml /app
+COPY ./Cargo.lock /app
+COPY ./src /app/src
+COPY rust-toolchain.toml /app
 # do a release build
 RUN cargo build --release --bin front
 
