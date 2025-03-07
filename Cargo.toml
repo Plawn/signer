@@ -7,7 +7,7 @@ edition = "2021"
 xitca-web = { version = "0.6.2", features = ["json", "logger", "tower-http-compat"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-ring = "0.17.8"
+ring = "0.17.12"
 anyhow = "1.0.94"
 thiserror = "2.0.9"
 base64 = "0.22.1"
