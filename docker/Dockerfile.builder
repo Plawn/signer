@@ -8,5 +8,8 @@ RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY ./Cargo.toml /app
 COPY ./Cargo.lock /app
-COPY ./src /app/src
 COPY rust-toolchain.toml /app
+COPY ./src/cache_helper.rs /app/src/cache_helper.rs
+
+RUN cargo build --release --bin cache
+

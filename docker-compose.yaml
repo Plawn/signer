@@ -9,7 +9,7 @@ services:
     ports:
       - "4000:4000"
   signer:
-    # image: signer/signer
+    image: signer/signer
     volumes:
       - ./CAs:/CAs
     command: --private-key "CAs/signer/key.p8" --public-key "CAs/signer/public.pem" --stamp-public-key "CAs/timestamp/public.pem"

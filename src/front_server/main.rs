@@ -7,6 +7,8 @@ use axum::{
     Json, Router,
 };
 use clap::Parser;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 struct AppState {
     stamper_client: StamperClient,
@@ -26,8 +28,7 @@ struct Cli {
     #[arg(long, default_value = "4000")]
     port: u32,
 }
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 
 #[tokio::main]
 async fn main() {

@@ -43,7 +43,12 @@ path = "src/stamper/main.rs"
 name = "front"
 path = "src/front_server/main.rs"
 
+[[bin]]
+name = "cache"
+path = "src/cache_helper.rs"
+
 
 [profile.release]
 strip = true
 lto =true
+codegen-units = 1
